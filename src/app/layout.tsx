@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Karla, Geist } from "next/font/google";
+import { Montserrat, Karla } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -33,23 +31,30 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#2799D7",
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#e7eef6" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1c1e" },
+  ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
+  params,
 }: Readonly<{
   children: React.ReactNode;
+  params: Promise<Record<string, never>>;
 }>) {
+  await params;
   return (
     <html
       lang="nl"
-      className={cn("h-full", montserrat.variable, karla.variable, "font-sans", geist.variable)}
+      className={`${montserrat.variable} ${karla.variable} h-full`}
     >
       <body className="min-h-full flex flex-col antialiased">
         {children}
+        <Toaster />
       </body>
     </html>
   );

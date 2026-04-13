@@ -1,62 +1,126 @@
-import type { Intent } from "@/types/chat";
+import type { ChatIntent } from "@/types/chat";
 
-interface IntentPattern {
-  intent: Intent;
-  keywords: string[];
+interface IntentRule {
+  intent: ChatIntent;
   patterns: RegExp[];
+  keywords: string[];
 }
 
-const intentPatterns: IntentPattern[] = [
+/**
+ * Priority-ordered intent rules. Patterns are checked first (more specific),
+ * then keyword fallback. Order matters: more specific intents come first.
+ */
+const rules: IntentRule[] = [
+  // ── Charging: home vs public (must come before charging_summary) ──
   {
-    intent: "my_vehicle",
-    keywords: [
-      "wagen", "auto", "voertuig", "nummerplaat", "range",
-      "merk", "model", "aandrijving", "brandstof", "kleur",
-      "rijd", "rijden", "kenteken",
-    ],
+    intent: "charging_home_vs_public",
     patterns: [
-      /welke\s+(wagen|auto|voertuig)/i,
-      /mijn\s+(wagen|auto|voertuig)/i,
-      /wat\s+(rijd|is\s+mijn\s+(wagen|auto|nummerplaat|range))/i,
-      /nummerplaat/i,
-      /range\s+(van\s+mijn|wagen)/i,
-      /aandrijving/i,
+      /thuis\s+(of|vs|versus)\s+(publiek|openbaar)/i,
+      /(publiek|openbaar)\s+(of|vs|versus)\s+thuis/i,
+      /laad\s+ik\s+meer/i,
+      /waar\s+laad\s+ik/i,
+      /hoeveel\s+(laad\s+ik\s+)?thuis/i,
+      /hoeveel\s+(laad\s+ik\s+)?publiek/i,
+    ],
+    keywords: ["thuis laden", "publiek laden", "thuis of publiek", "publiek of thuis"],
+  },
+
+  // ── Reimbursement ──
+  {
+    intent: "reimbursement_status",
+    patterns: [
+      /terugbetal/i,
+      /nog\s+(niet\s+)?terugbetaald/i,
+      /open\s+laadkosten/i,
+      /voorgeschoten/i,
+      /open\s+bedrag/i,
+      /openstaand/i,
+    ],
+    keywords: ["terugbetaald", "terugbetaling", "voorgeschoten", "openstaand"],
+  },
+
+  // ── Best range option (must come before allowed_options) ──
+  {
+    intent: "best_range_option",
+    patterns: [
+      /grootste\s+range/i,
+      /meeste\s+range/i,
+      /beste\s+range/i,
+      /langste\s+(range|afstand|actieradius)/i,
+      /rijdt\s+het\s+verst/i,
+      /welke.*optie.*range/i,
+      /interessant.*lange\s+afstand/i,
+      /meeste\s+kilometers/i,
+    ],
+    keywords: ["grootste range", "beste range", "lange afstand", "rijdt het verst"],
+  },
+
+  // ── Allowed vehicle options ──
+  {
+    intent: "allowed_options",
+    patterns: [
+      /welke\s+(wagens?|auto'?s?|voertuigen?|modellen)\s+(mag|kan|zijn|heb)/i,
+      /beschikbare\s+(wagens?|auto'?s?|opties|voertuigen?|modellen)/i,
+      /wat\s+(mag|kan)\s+ik\s+kiezen/i,
+      /kiesbare\s+wagens/i,
+      /welke\s+modellen/i,
+    ],
+    keywords: [
+      "beschikbare wagens", "beschikbare opties", "mag ik kiezen",
+      "kiesbare", "opties", "beschikbaar",
     ],
   },
+
+  // ── My documents ──
   {
     intent: "my_documents",
-    keywords: ["document", "documenten", "offerte", "bestand", "bestanden"],
     patterns: [
       /mijn\s+document/i,
       /welke\s+document/i,
       /toon.*offerte/i,
       /mijn\s+offerte/i,
+      /heb\s+ik\s+document/i,
     ],
+    keywords: ["documenten", "document", "offerte"],
   },
+
+  // ── My contract ──
   {
     intent: "my_contract",
-    keywords: ["contract", "goedkeuring", "goedkeuringsstatus", "looptijd"],
     patterns: [
       /mijn\s+contract/i,
-      /contract\s*(info|status|gegevens)?/i,
+      /contractnummer/i,
+      /contract\s*info/i,
       /goedkeuringsstatus/i,
-      /wat\s+is\s+mijn\s+contract/i,
+      /contract\s+loopt\s+af/i,
+      /einddatum\s+contract/i,
+      /wanneer\s+loopt/i,
+    ],
+    keywords: [
+      "contract", "contractnummer", "contractstatus",
+      "goedkeuringsstatus", "einddatum contract", "looptijd",
     ],
   },
+
+  // ── My vehicle ──
   {
-    intent: "allowed_options",
-    keywords: ["kiezen", "keuze", "opties", "beschikbaar", "beschikbare", "budget", "categorie"],
+    intent: "my_vehicle",
     patterns: [
-      /welke\s+(wagens?|auto'?s?|voertuigen?)\s+(mag|kan|zijn)/i,
-      /beschikbare\s+(wagens?|auto'?s?|opties|voertuigen?)/i,
-      /wat\s+(mag|kan)\s+ik\s+kiezen/i,
-      /mijn\s+budget/i,
-      /welke\s+modellen/i,
+      /welke\s+(wagen|auto|voertuig)/i,
+      /mijn\s+(wagen|auto|voertuig)/i,
+      /wat\s+rijd\s+ik/i,
+      /wat\s+is\s+mijn\s+(wagen|auto|nummerplaat|range|actieradius)/i,
+      /met\s+welke\s+(wagen|auto)/i,
+    ],
+    keywords: [
+      "mijn wagen", "welke wagen", "nummerplaat", "range",
+      "actieradius", "aandrijving", "mijn auto",
     ],
   },
+
+  // ── Charging summary ──
   {
     intent: "charging_summary",
-    keywords: ["laden", "laad", "laadkosten", "geladen", "kwh", "sessie", "sessies", "kosten"],
     patterns: [
       /hoeveel\s+(heb\s+ik\s+)?geladen/i,
       /(mijn\s+)?laadkosten/i,
@@ -64,52 +128,40 @@ const intentPatterns: IntentPattern[] = [
       /laad\s*sessies?/i,
       /hoeveel\s+sessies/i,
       /gemiddeld.*laden/i,
+      /kost\s+laden/i,
+      /hoeveel\s+kwh/i,
+    ],
+    keywords: [
+      "laadkosten", "geladen", "kwh", "sessies",
+      "kost laden", "hoeveel geladen",
     ],
   },
-  {
-    intent: "charging_home_vs_public",
-    keywords: ["thuis", "publiek", "openbaar"],
-    patterns: [
-      /thuis\s+(of|vs|versus)\s+(publiek|openbaar)/i,
-      /laad\s+ik\s+meer/i,
-      /waar\s+laad/i,
-      /publiek.*thuis|thuis.*publiek/i,
-    ],
-  },
-  {
-    intent: "best_range_option",
-    keywords: ["grootste range", "meeste range", "langste", "afstand"],
-    patterns: [
-      /grootste\s+range/i,
-      /meeste\s+range/i,
-      /beste\s+range/i,
-      /lange\s+afstand/i,
-      /welke\s+optie.*range/i,
-      /interessant.*lange\s+afstand/i,
-    ],
-  },
+
+  // ── Greeting ──
   {
     intent: "greeting",
-    keywords: ["hallo", "hey", "hoi", "goedemorgen", "goedemiddag", "goedenavond", "hi", "hello"],
-    patterns: [/^(hallo|hey|hoi|hi|hello|goedemorgen|goedemiddag|goedenavond)\b/i],
+    patterns: [/^(hallo|hey|hoi|hi|hello|goedemorgen|goedemiddag|goedenavond|dag)\b/i],
+    keywords: ["hallo", "hey", "hoi", "hi", "hello", "goedemorgen", "goedemiddag", "goedenavond"],
   },
 ];
 
-export function detectIntent(message: string): Intent {
+export function detectIntent(message: string): ChatIntent {
   const normalized = message.toLowerCase().trim();
 
-  for (const { intent, patterns } of intentPatterns) {
-    for (const pattern of patterns) {
+  // Phase 1: regex patterns (high confidence)
+  for (const rule of rules) {
+    for (const pattern of rule.patterns) {
       if (pattern.test(normalized)) {
-        return intent;
+        return rule.intent;
       }
     }
   }
 
-  for (const { intent, keywords } of intentPatterns) {
-    for (const keyword of keywords) {
-      if (normalized.includes(keyword)) {
-        return intent;
+  // Phase 2: keyword fallback
+  for (const rule of rules) {
+    for (const kw of rule.keywords) {
+      if (normalized.includes(kw)) {
+        return rule.intent;
       }
     }
   }

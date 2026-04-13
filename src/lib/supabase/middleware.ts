@@ -31,12 +31,13 @@ export async function updateSession(request: NextRequest) {
 
   const isLoginPage = request.nextUrl.pathname === "/login";
   const isAuthCallback = request.nextUrl.pathname === "/auth/callback";
+  const isPublicAuthApi = request.nextUrl.pathname.startsWith("/api/auth/");
   const isPublicAsset =
     request.nextUrl.pathname.startsWith("/_next") ||
     request.nextUrl.pathname.startsWith("/manifest") ||
     request.nextUrl.pathname.includes(".");
 
-  if (isPublicAsset || isAuthCallback) {
+  if (isPublicAsset || isAuthCallback || isPublicAuthApi) {
     return supabaseResponse;
   }
 

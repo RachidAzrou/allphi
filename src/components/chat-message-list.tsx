@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { MessageCircle, User } from "lucide-react";
-import type { ChatMessage } from "@/types/chat";
+import { Bot, Paperclip } from "lucide-react";
+import type { ChatAttachment, ChatMessage } from "@/types/chat";
 import { AssistantResponseCard } from "./assistant-response-card";
 
 interface ChatMessageListProps {
@@ -11,7 +11,10 @@ interface ChatMessageListProps {
   isLoading?: boolean;
 }
 
-export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  isLoading,
+}: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,7 +24,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   if (messages.length === 0 && !isLoading) return null;
 
   return (
-    <div className="flex-1 px-4 space-y-4 pb-4">
+    <div className="w-full space-y-2 px-safe pb-3 pt-2">
       {messages.map((msg) => (
         <motion.div
           key={msg.id}
@@ -30,7 +33,7 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
           transition={{ duration: 0.2 }}
         >
           {msg.role === "user" ? (
-            <UserBubble content={msg.content} />
+            <UserBubble content={msg.content} attachments={msg.attachments} />
           ) : (
             <AssistantBubble message={msg} />
           )}
@@ -41,16 +44,20 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex items-start gap-3"
+          className="flex w-full min-w-0 justify-start"
         >
-          <div className="w-8 h-8 rounded-full bg-[#2799D7] flex items-center justify-center shrink-0">
-            <MessageCircle className="w-4 h-4 text-white" />
-          </div>
-          <div className="bg-white border border-[#DCE6EE] rounded-2xl rounded-tl-md px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-[#2799D7] animate-[pulse_1s_ease-in-out_infinite]" />
-              <div className="w-2 h-2 rounded-full bg-[#2799D7] animate-[pulse_1s_ease-in-out_0.2s_infinite]" />
-              <div className="w-2 h-2 rounded-full bg-[#2799D7] animate-[pulse_1s_ease-in-out_0.4s_infinite]" />
+          <div className="flex min-w-0 w-full items-start justify-start gap-2">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm">
+              <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0 max-w-[min(100%,42rem)]">
+              <AssistantSpeechBubble>
+                <div className="flex min-w-[72px] items-center justify-center gap-1 px-1 py-0.5">
+                  <div className="h-2 w-2 animate-[pulse_1s_ease-in-out_infinite] rounded-full bg-[#8696A0]" />
+                  <div className="h-2 w-2 animate-[pulse_1s_ease-in-out_0.2s_infinite] rounded-full bg-[#8696A0]" />
+                  <div className="h-2 w-2 animate-[pulse_1s_ease-in-out_0.4s_infinite] rounded-full bg-[#8696A0]" />
+                </div>
+              </AssistantSpeechBubble>
             </div>
           </div>
         </motion.div>
@@ -61,39 +68,147 @@ export function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   );
 }
 
-function UserBubble({ content }: { content: string }) {
+function UserBubble({
+  content,
+  attachments,
+}: {
+  content: string;
+  attachments?: ChatAttachment[];
+}) {
+  const hasText = content.trim().length > 0;
+  const hasFiles = (attachments?.length ?? 0) > 0;
+  if (!hasText && !hasFiles) return null;
+
   return (
-    <div className="flex justify-end">
-      <div className="flex items-start gap-2 max-w-[85%] flex-row-reverse">
-        <div className="w-8 h-8 rounded-full bg-[#163247] flex items-center justify-center shrink-0">
-          <User className="w-4 h-4 text-white" />
-        </div>
-        <div className="bg-[#2799D7] text-white rounded-2xl rounded-tr-md px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
-        </div>
+    <div className="flex w-full min-w-0 justify-end">
+      <div className="flex w-fit max-w-[min(92%,42rem)] shrink-0 flex-col items-end sm:max-w-[min(85%,42rem)]">
+        <UserSpeechBubble>
+          {hasText && (
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere]">
+              {content}
+            </p>
+          )}
+          {hasFiles && (
+            <ul
+              className={
+                hasText
+                  ? "mt-2 space-y-1 border-t border-[#163247]/10 pt-2"
+                  : "space-y-1"
+              }
+            >
+              {attachments!.map((a, i) => (
+                <li
+                  key={`${a.name}-${i}`}
+                  className="space-y-1.5 text-[13px] leading-snug text-[#5F7382]"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Paperclip
+                      className="h-3.5 w-3.5 shrink-0 text-[#2799D7]"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    {a.url ? (
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="min-w-0 truncate text-[#2799D7] underline decoration-[#2799D7]/35 underline-offset-2 [overflow-wrap:anywhere] hover:decoration-[#2799D7]"
+                      >
+                        {a.name}
+                      </a>
+                    ) : (
+                      <span className="min-w-0 truncate [overflow-wrap:anywhere]">
+                        {a.name}
+                      </span>
+                    )}
+                  </div>
+                  {a.url && a.mime?.startsWith("image/") && (
+                    <img
+                      src={a.url}
+                      alt=""
+                      className="max-h-40 w-auto max-w-full rounded-lg border border-[#0000000d] object-contain"
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </UserSpeechBubble>
       </div>
     </div>
   );
 }
 
 function AssistantBubble({ message }: { message: ChatMessage }) {
-  return (
-    <div className="flex items-start gap-3 max-w-[92%]">
-      <div className="w-8 h-8 rounded-full bg-[#2799D7] flex items-center justify-center shrink-0 mt-0.5">
-        <MessageCircle className="w-4 h-4 text-white" />
-      </div>
-      <div className="flex-1 space-y-3 min-w-0">
-        <div className="bg-white border border-[#DCE6EE] rounded-2xl rounded-tl-md px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          <div
-            className="text-sm text-[#163247] leading-relaxed prose-sm [&_strong]:font-semibold [&_strong]:text-[#163247]"
-            dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
-          />
-        </div>
+  const hasCards = (message.cards?.length ?? 0) > 0;
 
-        {message.cards?.map((card, i) => (
-          <AssistantResponseCard key={i} card={card} />
-        ))}
+  return (
+    <div className="flex w-full min-w-0 flex-col justify-start gap-2">
+      {/* Avatar alleen naast de tekstballon — niet meeschalen met infokaarten */}
+      <div className="flex w-full min-w-0 items-start justify-start gap-2">
+        <div
+          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm"
+          aria-hidden
+        >
+          <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
+        </div>
+        <div className="min-w-0 max-w-[min(100%,42rem)]">
+          <AssistantSpeechBubble>
+            <div
+              className="break-words text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere] [&_strong]:font-semibold [&_strong]:text-[#163247]"
+              dangerouslySetInnerHTML={{
+                __html: formatMarkdown(message.content),
+              }}
+            />
+          </AssistantSpeechBubble>
+        </div>
       </div>
+
+      {hasCards && (
+        <div className="min-w-0 w-full pl-12">
+          <div className="w-[min(100%,36rem)] space-y-2">
+            {message.cards!.map((card, i) => (
+              <AssistantResponseCard key={i} card={card} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tail points left toward the assistant avatar (bovenaan, in lijn met het icoon) */
+function AssistantSpeechBubble({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={[
+        "relative isolate w-full rounded-2xl rounded-tl-md bg-white px-3 py-2",
+        "shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
+        "before:pointer-events-none before:absolute before:top-3 before:right-full before:z-0 before:-mr-px",
+        "before:h-0 before:w-0 before:border-solid",
+        "before:border-y-[7px] before:border-r-[7px] before:border-y-transparent before:border-r-white",
+        "before:content-['']",
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Tail points right toward the user (medewerker) */
+function UserSpeechBubble({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={[
+        "relative isolate w-fit max-w-full rounded-2xl rounded-br-md bg-[#D4E9F9] px-3 py-2",
+        "shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
+        "before:pointer-events-none before:absolute before:bottom-[7px] before:left-full before:z-0 before:-ml-px",
+        "before:h-0 before:w-0 before:border-solid",
+        "before:border-y-[7px] before:border-l-[7px] before:border-y-transparent before:border-l-[#D4E9F9]",
+        "before:content-['']",
+      ].join(" ")}
+    >
+      {children}
     </div>
   );
 }

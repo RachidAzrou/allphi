@@ -1,46 +1,92 @@
-export type Intent =
+// ──────────────────────────────────────────────
+// Intents
+// ──────────────────────────────────────────────
+export type ChatIntent =
   | "my_vehicle"
-  | "my_documents"
   | "my_contract"
+  | "my_documents"
   | "allowed_options"
+  | "best_range_option"
   | "charging_summary"
   | "charging_home_vs_public"
-  | "best_range_option"
+  | "reimbursement_status"
   | "greeting"
+  // Manager intents (stubs)
+  | "fleet_overview"
+  | "expiring_contracts"
+  | "charging_cost_overview"
+  | "top_cost_drivers"
+  | "home_vs_public_fleet"
+  | "open_reimbursements_fleet"
+  | "non_compliant_assignments"
   | "unknown";
+
+export type UserRole = "medewerker" | "fleet_manager";
+
+// ──────────────────────────────────────────────
+// Card system
+// ──────────────────────────────────────────────
+export type CardType =
+  | "vehicle"
+  | "contract"
+  | "document"
+  | "option"
+  | "charging"
+  | "insight";
+
+export interface CardField {
+  label: string;
+  value: string;
+}
+
+export interface ResponseCard {
+  type: CardType;
+  title: string;
+  fields: CardField[];
+}
+
+// ──────────────────────────────────────────────
+// Chat response (API shape)
+// ──────────────────────────────────────────────
+export interface ChatResponse {
+  intent: ChatIntent;
+  title: string;
+  message: string;
+  cards?: ResponseCard[];
+  suggestions?: string[];
+}
+
+// ──────────────────────────────────────────────
+// Chat message (client-side)
+// ──────────────────────────────────────────────
+export interface ChatAttachment {
+  name: string;
+  bucket?: string;
+  path?: string;
+  mime?: string;
+  /** Signed URL (24h) when loaded from history */
+  url?: string;
+}
+
+/** POST /api/chat success payload (assistant + persisted user row + signed bijlagen). */
+export interface ChatPostPersisted {
+  userMessageId: string;
+  attachments?: ChatAttachment[];
+}
+
+export type ChatPostResponse = ChatResponse & {
+  persisted: ChatPostPersisted;
+};
 
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  intent?: Intent;
-  data?: Record<string, unknown>;
+  intent?: ChatIntent;
+  title?: string;
   cards?: ResponseCard[];
-}
-
-export type ResponseCardType =
-  | "vehicle_info"
-  | "contract_info"
-  | "document_list"
-  | "allowed_vehicles"
-  | "charging_summary"
-  | "charging_comparison"
-  | "text";
-
-export interface ResponseCard {
-  type: ResponseCardType;
-  data: Record<string, unknown>;
-}
-
-export interface IntentResult {
-  intent: Intent;
-  message: string;
-  cards?: ResponseCard[];
-}
-
-export interface QuickAction {
-  label: string;
-  message: string;
-  icon: string;
+  suggestions?: string[];
+  /** User-uploaded files (names shown in the bubble; upload happens on send) */
+  attachments?: ChatAttachment[];
 }

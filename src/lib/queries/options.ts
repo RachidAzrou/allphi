@@ -9,11 +9,12 @@ export async function getAllowedVehicleOptionsByEmail(
   const { data, error } = await supabase
     .from("v_allowed_vehicle_options")
     .select("*")
-    .eq("medewerker_email", email)
+    .eq("emailadres", email)
+    .order("optiebudget_voor_medewerker", { ascending: false })
     .order("range_km", { ascending: false });
 
   if (error) {
-    console.error("Error fetching allowed vehicle options:", error);
+    console.error("[options] Error fetching allowed options:", error.message);
     return [];
   }
 
@@ -28,13 +29,13 @@ export async function getBestRangeOptionByEmail(
   const { data, error } = await supabase
     .from("v_allowed_vehicle_options")
     .select("*")
-    .eq("medewerker_email", email)
+    .eq("emailadres", email)
     .order("range_km", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error) {
-    console.error("Error fetching best range option:", error);
+    console.error("[options] Error fetching best range option:", error.message);
     return null;
   }
 

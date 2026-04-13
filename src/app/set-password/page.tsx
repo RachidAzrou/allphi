@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
-const LoginForm = dynamic(() => import("./login-form"), {
+const SetPasswordForm = dynamic(() => import("./set-password-form"), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center">
@@ -13,7 +13,7 @@ const LoginForm = dynamic(() => import("./login-form"), {
   ),
 });
 
-export default function LoginPage() {
+export default function SetPasswordPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC]">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
@@ -24,7 +24,7 @@ export default function LoginPage() {
             </div>
           }
         >
-          <LoginForm />
+          <SetPasswordForm />
         </Suspense>
       </div>
 

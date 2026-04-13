@@ -1,34 +1,68 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MessageCircle } from "lucide-react";
+import { Bot, Car, FileText, Zap, ClipboardList } from "lucide-react";
 
 interface WelcomeCardProps {
   voornaam?: string;
+  onAction: (message: string) => void;
 }
 
-export function WelcomeCard({ voornaam }: WelcomeCardProps) {
-  const greeting = voornaam ? `Hallo ${voornaam}` : "Welkom";
+const actions = [
+  { label: "Mijn wagen", message: "Wat is mijn wagen?", icon: Car },
+  { label: "Mijn documenten", message: "Wat zijn mijn documenten?", icon: FileText },
+  { label: "Mijn laadkosten", message: "Hoeveel heb ik geladen?", icon: Zap },
+  { label: "Contractinfo", message: "Wat is mijn contract?", icon: ClipboardList },
+];
+
+export function WelcomeCard({ voornaam, onAction }: WelcomeCardProps) {
+  const greeting = voornaam ? `Hallo ${voornaam}!` : "Welkom!";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="px-4 pt-6 pb-2"
+      transition={{ duration: 0.2 }}
+      className="w-full px-safe pt-4 pb-2"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-[#2799D7] flex items-center justify-center shrink-0 mt-0.5">
-          <MessageCircle className="w-5 h-5 text-white" />
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm">
+          <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
         </div>
-        <div>
-          <h2 className="text-lg font-heading font-semibold text-[#163247]">
-            {greeting}!
-          </h2>
-          <p className="text-sm text-[#5F7382] mt-1 leading-relaxed">
-            Ik ben je Fleet Companion. Stel me een vraag over je wagen,
-            contract, documenten of laadkosten.
-          </p>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="rounded-[8px] rounded-bl-[3px] bg-white px-3 py-2 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+            <p className="break-words text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere]">
+              <span className="font-semibold">{greeting}</span> Waar kan ik je
+              mee helpen? Kies iets of stel je vraag hieronder.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {actions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => onAction(action.message)}
+                  className="group flex w-full touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-[#00000014] bg-white px-1.5 py-3 text-center shadow-[0_1px_0.5px_rgba(11,20,26,0.1)] transition-[transform,background-color,box-shadow] active:scale-[0.98] active:bg-[#E8F4FB] sm:py-3.5"
+                >
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2799D7]/14 transition-colors group-active:bg-[#2799D7]/22 sm:h-11 sm:w-11"
+                    aria-hidden
+                  >
+                    <Icon
+                      className="h-6 w-6 text-[#2799D7] sm:h-7 sm:w-7"
+                      strokeWidth={1.5}
+                    />
+                  </span>
+                  <span className="w-full px-0.5 text-center text-[12px] font-semibold leading-tight tracking-tight text-[#2799D7] sm:text-[13px]">
+                    {action.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </motion.div>
