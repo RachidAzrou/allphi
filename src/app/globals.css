@@ -125,8 +125,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground font-sans;
+    /* Vermindert browser “bounce” op het document; scroll blijft in panels (chat) mogelijk. */
+    overscroll-behavior-y: none;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-montserrat), system-ui, sans-serif;
@@ -148,5 +153,9 @@
   .scroll-pad-x-safe {
     scroll-padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
     scroll-padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+  /* Sonner: niet onder de notch / Dynamic Island */
+  [data-sonner-toaster] {
+    top: max(12px, env(safe-area-inset-top, 0px)) !important;
   }
 }

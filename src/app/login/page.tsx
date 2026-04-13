@@ -15,8 +15,8 @@ const LoginForm = dynamic(() => import("./login-form"), {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#F7F9FC]">
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+    <div className="flex min-h-dvh flex-col bg-[#F7F9FC] safe-top">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12">
         <Suspense
           fallback={
             <div className="flex items-center justify-center">
@@ -28,7 +28,7 @@ export default function LoginPage() {
         </Suspense>
       </div>
 
-      <div className="text-center py-4">
+      <div className="safe-bottom py-4 text-center">
         <p className="text-xs text-[#5F7382]/60">AllPhi Fleet Companion</p>
       </div>
     </div>

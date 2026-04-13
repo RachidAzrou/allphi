@@ -21,9 +21,19 @@ export const metadata: Metadata = {
   title: "AllPhi Fleet Companion",
   description: "Jouw persoonlijke fleet assistent — snel antwoord op al je wagenvragen.",
   manifest: "/manifest.json",
+  applicationName: "Fleet Companion",
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
+  icons: {
+    icon: [{ url: "/icons/allphi-logo.png", type: "image/png", sizes: "512x512" }],
+    apple: [{ url: "/icons/allphi-logo.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Fleet Companion",
   },
 };
@@ -33,9 +43,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
+  colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e7eef6" },
-    { media: "(prefers-color-scheme: dark)", color: "#1c1c1e" },
+    { media: "(prefers-color-scheme: light)", color: "#2799D7" },
+    { media: "(prefers-color-scheme: dark)", color: "#163247" },
   ],
 };
 
@@ -50,9 +61,9 @@ export default async function RootLayout({
   return (
     <html
       lang="nl"
-      className={`${montserrat.variable} ${karla.variable} h-full`}
+      className={`${montserrat.variable} ${karla.variable} h-full overflow-x-hidden`}
     >
-      <body className="min-h-full flex flex-col antialiased">
+      <body className="flex min-h-dvh flex-col antialiased [-webkit-tap-highlight-color:transparent] selection:bg-[#2799D7]/20 selection:text-[#163247]">
         {children}
         <Toaster />
       </body>

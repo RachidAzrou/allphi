@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Camera, Paperclip, X } from "lucide-react";
+import { ArrowUp, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   CHAT_ATTACHMENT_INPUT_ACCEPT,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENTS,
 } from "@/lib/chat/attachment-limits";
-import { isMobileOrTabletUserAgent } from "@/lib/mobile-user-agent";
 
 interface ChatComposerProps {
   onSend: (message: string, files: File[]) => void;
@@ -20,12 +19,6 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
   const [files, setFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const [showCamera, setShowCamera] = useState(false);
-
-  useEffect(() => {
-    setShowCamera(isMobileOrTabletUserAgent(navigator.userAgent));
-  }, []);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -71,9 +64,6 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = "";
-    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -116,36 +106,6 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
         )}
 
         <div className="flex w-full min-w-0 items-end gap-2">
-          {showCamera ? (
-            <>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                className="sr-only"
-                accept="image/*"
-                capture="environment"
-                tabIndex={-1}
-                onChange={(e) => {
-                  addFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={disabled || files.length >= MAX_CHAT_ATTACHMENTS}
-                className="mb-0.5 flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-[#00000014] bg-white text-[#2799D7] shadow-[0_1px_0.5px_rgba(11,20,26,0.08)]
-                           hover:bg-[#E8F4FB] active:scale-[0.96]
-                           disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white
-                           transition-all duration-150"
-                aria-label="Foto maken met achtercamera"
-              >
-                <Camera className="h-5 w-5" strokeWidth={2.25} />
-              </button>
-            </>
-          ) : null}
-
           <textarea
             ref={textareaRef}
             value={value}
