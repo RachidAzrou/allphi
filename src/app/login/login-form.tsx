@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Mail, Lock, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Loader2, CheckCircle2, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "activate" | "forgot";
@@ -12,6 +12,8 @@ type Mode = "login" | "activate" | "forgot";
 export default function LoginForm() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
+  const [voornaam, setVoornaam] = useState("");
+  const [naam, setNaam] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -30,22 +32,40 @@ export default function LoginForm() {
     }
   }, [authError]);
 
-  const checkMedewerker = async (): Promise<boolean> => {
+  const checkMedewerker = async (options?: {
+    withNames?: boolean;
+  }): Promise<boolean> => {
+    const body: { email: string; naam?: string; voornaam?: string } = {
+      email: email.trim().toLowerCase(),
+    };
+    if (options?.withNames) {
+      body.voornaam = voornaam.trim();
+      body.naam = naam.trim();
+    }
+
     const res = await fetch("/api/auth/check-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      toast.error("Er ging iets mis bij het controleren van je e-mailadres. Probeer het later opnieuw.");
+      toast.error("Er ging iets mis bij het controleren van je gegevens. Probeer het later opnieuw.");
       return false;
     }
 
     const { exists } = await res.json();
 
     if (!exists) {
-      toast.error("Je kan alleen inloggen als je door je organisatie bent toegevoegd aan Fleet Companion.");
+      if (options?.withNames) {
+        toast.error(
+          "Voornaam, naam en e-mail komen niet overeen met onze gegevens. Controleer je invoer of neem contact op met je fleet manager.",
+        );
+      } else {
+        toast.error(
+          "Je kan alleen inloggen als je door je organisatie bent toegevoegd aan Fleet Companion.",
+        );
+      }
       return false;
     }
 
@@ -70,7 +90,7 @@ export default function LoginForm() {
   };
 
   const handleActivate = async () => {
-    const exists = await checkMedewerker();
+    const exists = await checkMedewerker({ withNames: true });
     if (!exists) return;
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -130,12 +150,15 @@ export default function LoginForm() {
   const switchMode = (newMode: Mode) => {
     setMode(newMode);
     setPassword("");
+    setVoornaam("");
+    setNaam("");
     setIsSent(false);
   };
 
   const subtitle: Record<Mode, string> = {
     login: "Log in met je werk e-mailadres",
-    activate: "Ontvang een bevestigingsmail om je account te activeren",
+    activate:
+      "Vul je voornaam, naam en werk e-mail in om je account te activeren",
     forgot: "Ontvang een e-mail om je wachtwoord opnieuw in te stellen",
   };
 
@@ -184,6 +207,42 @@ export default function LoginForm() {
             onSubmit={handleSubmit}
             className="space-y-3"
           >
+            {mode === "activate" && (
+              <>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#5F7382]" />
+                  <input
+                    type="text"
+                    value={voornaam}
+                    onChange={(e) => setVoornaam(e.target.value)}
+                    placeholder="Voornaam"
+                    required
+                    autoComplete="given-name"
+                    autoFocus
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#DCE6EE] bg-white
+                               text-sm text-[#163247] placeholder:text-[#5F7382]/50
+                               focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30 focus:border-[#2799D7]
+                               transition-all"
+                  />
+                </div>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#5F7382]" />
+                  <input
+                    type="text"
+                    value={naam}
+                    onChange={(e) => setNaam(e.target.value)}
+                    placeholder="Naam"
+                    required
+                    autoComplete="family-name"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#DCE6EE] bg-white
+                               text-sm text-[#163247] placeholder:text-[#5F7382]/50
+                               focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30 focus:border-[#2799D7]
+                               transition-all"
+                  />
+                </div>
+              </>
+            )}
+
             {/* Email */}
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#5F7382]" />
@@ -194,7 +253,7 @@ export default function LoginForm() {
                 placeholder="naam@bedrijf.be"
                 required
                 autoComplete="email"
-                autoFocus
+                autoFocus={mode !== "activate"}
                 className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#DCE6EE] bg-white
                            text-sm text-[#163247] placeholder:text-[#5F7382]/50
                            focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30 focus:border-[#2799D7]
@@ -224,8 +283,13 @@ export default function LoginForm() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={isLoading || !email.trim() || (mode === "login" && !password)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+              disabled={
+                isLoading ||
+                !email.trim() ||
+                (mode === "activate" && (!voornaam.trim() || !naam.trim())) ||
+                (mode === "login" && !password)
+              }
+              className="w-full flex items-center justify-center px-4 py-3 rounded-xl
                          bg-[#2799D7] text-white text-sm font-semibold
                          hover:bg-[#1E7AB0] active:scale-[0.98]
                          disabled:opacity-50 disabled:cursor-not-allowed
@@ -234,10 +298,7 @@ export default function LoginForm() {
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <>
-                  {buttonLabel[mode]}
-                  <ArrowRight className="w-4 h-4" />
-                </>
+                buttonLabel[mode]
               )}
             </button>
 
@@ -292,14 +353,17 @@ export default function LoginForm() {
               Klik op de link in de e-mail om verder te gaan.
             </p>
             <button
+              type="button"
               onClick={() => {
                 setIsSent(false);
                 setEmail("");
+                setVoornaam("");
+                setNaam("");
                 setPassword("");
               }}
               className="mt-4 text-sm text-[#2799D7] hover:underline"
             >
-              Ander e-mailadres gebruiken
+              Opnieuw beginnen
             </button>
           </motion.div>
         )}

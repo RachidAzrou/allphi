@@ -12,9 +12,15 @@ import {
 interface ChatComposerProps {
   onSend: (message: string, files: File[]) => void;
   disabled?: boolean;
+  /** Mobiele camera i.p.v. bestandkiezer; optioneel. */
+  showCamera?: boolean;
 }
 
-export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
+export function ChatComposer({
+  onSend,
+  disabled,
+  showCamera = false,
+}: ChatComposerProps) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -30,22 +36,24 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
 
   const addFiles = (list: FileList | null) => {
     if (!list?.length) return;
-    const next: File[] = [...files];
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      if (f.size > MAX_CHAT_ATTACHMENT_BYTES) {
-        toast.error(
-          `“${f.name}” is te groot (max. ${Math.round(MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024))} MB).`,
-        );
-        continue;
+    setFiles((prev) => {
+      const next: File[] = [...prev];
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i];
+        if (f.size > MAX_CHAT_ATTACHMENT_BYTES) {
+          toast.error(
+            `“${f.name}” is te groot (max. ${Math.round(MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024))} MB).`,
+          );
+          continue;
+        }
+        if (next.length >= MAX_CHAT_ATTACHMENTS) {
+          toast.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen.`);
+          break;
+        }
+        next.push(f);
       }
-      if (next.length >= MAX_CHAT_ATTACHMENTS) {
-        toast.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen.`);
-        break;
-      }
-      next.push(f);
-    }
-    setFiles(next);
+      return next;
+    });
   };
 
   const removeFile = (index: number) => {
@@ -131,6 +139,7 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
             accept={CHAT_ATTACHMENT_INPUT_ACCEPT}
             multiple
             tabIndex={-1}
+            capture={showCamera ? "environment" : undefined}
             onChange={(e) => {
               addFiles(e.target.files);
               e.target.value = "";

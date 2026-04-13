@@ -16,6 +16,7 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [userEmail, setUserEmail] = useState("");
+  const [userDisplayName, setUserDisplayName] = useState("");
   const [voornaam, setVoornaam] = useState("");
 
   const router = useRouter();
@@ -50,12 +51,21 @@ export default function ChatPage() {
 
       const { data: medewerker } = await supabase
         .from("medewerkers")
-        .select("voornaam")
+        .select("voornaam, naam")
         .eq("emailadres", user.email)
         .maybeSingle();
 
-      if (medewerker?.voornaam) {
-        setVoornaam(medewerker.voornaam);
+      if (medewerker) {
+        if (medewerker.voornaam) {
+          setVoornaam(medewerker.voornaam);
+        }
+        const volledigeNaam = [medewerker.voornaam, medewerker.naam]
+          .filter((s) => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.trim())
+          .join(" ");
+        if (volledigeNaam) {
+          setUserDisplayName(volledigeNaam);
+        }
       }
 
       try {
@@ -100,8 +110,7 @@ export default function ChatPage() {
       setIsLoading(true);
 
       try {
-        const messageForApi =
-          trimmed || (files.length > 0 ? "Bijlagen toegevoegd." : "");
+        const messageForApi = trimmed;
 
         let response: Response;
         if (files.length === 0) {
@@ -176,12 +185,12 @@ export default function ChatPage() {
   return (
     <div className="flex h-dvh min-h-0 max-h-dvh flex-col overflow-hidden bg-chat-canvas">
       {isBootLoading ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center">
           <LoadingState />
         </div>
       ) : (
         <>
-          <AppHeader userEmail={userEmail} />
+          <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
 
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">

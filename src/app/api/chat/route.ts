@@ -69,10 +69,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!message && files.length > 0) {
-        message = "Bijlagen toegevoegd.";
-      }
-
       const bucket = CHAT_ATTACHMENTS_BUCKET;
       const { stored, promptLines } = await uploadChatFilesForPrompt(supabase, {
         userId: user.id,

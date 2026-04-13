@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Lock, ArrowRight, Loader2 } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 
 export default function SetPasswordForm() {
   const [password, setPassword] = useState("");
@@ -12,6 +12,8 @@ export default function SetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isWijzigen = searchParams.get("wijzigen") === "1";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +44,11 @@ export default function SetPasswordForm() {
         return;
       }
 
-      toast.success("Wachtwoord ingesteld! Je wordt doorgestuurd.");
+      toast.success(
+        isWijzigen
+          ? "Wachtwoord gewijzigd! Je wordt doorgestuurd."
+          : "Wachtwoord ingesteld! Je wordt doorgestuurd.",
+      );
       router.push("/chat");
     } catch {
       toast.error("Er is een onverwachte fout opgetreden.");
@@ -59,18 +65,19 @@ export default function SetPasswordForm() {
       className="w-full max-w-sm"
     >
       <div className="text-center mb-8">
-        <img
-          src="/icons/allphi-logo.png"
-          alt="AllPhi"
-          width={64}
-          height={64}
-          className="w-16 h-16 rounded-full mx-auto mb-4 shadow-lg shadow-[#2799D7]/20"
-        />
+        <div
+          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#2799D7] shadow-lg shadow-[#2799D7]/20"
+          aria-hidden={true}
+        >
+          <Lock className="h-8 w-8 text-white" strokeWidth={1.75} />
+        </div>
         <h1 className="text-2xl font-heading font-bold text-[#163247]">
-          Wachtwoord instellen
+          {isWijzigen ? "Wachtwoord wijzigen" : "Wachtwoord instellen"}
         </h1>
         <p className="text-sm text-[#5F7382] mt-1.5">
-          Kies een wachtwoord voor je Fleet Companion account.
+          {isWijzigen
+            ? "Vul hieronder je nieuwe wachtwoord in."
+            : "Kies een wachtwoord voor je Fleet Companion account."}
         </p>
       </div>
 
@@ -115,7 +122,7 @@ export default function SetPasswordForm() {
         <button
           type="submit"
           disabled={isLoading || !password || !confirm}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+          className="w-full flex items-center justify-center px-4 py-3 rounded-xl
                      bg-[#2799D7] text-white text-sm font-semibold
                      hover:bg-[#1E7AB0] active:scale-[0.98]
                      disabled:opacity-50 disabled:cursor-not-allowed
@@ -124,11 +131,19 @@ export default function SetPasswordForm() {
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
-            <>
-              Wachtwoord opslaan
-              <ArrowRight className="w-4 h-4" />
-            </>
+            isWijzigen ? "Nieuw wachtwoord opslaan" : "Wachtwoord opslaan"
           )}
+        </button>
+
+        <button
+          type="button"
+          disabled={isLoading}
+          onClick={() => router.push("/chat")}
+          className="w-full px-4 py-3 rounded-xl text-sm font-medium text-[#5F7382]
+                     transition-colors hover:bg-[#E8F4FB] hover:text-[#163247]
+                     disabled:opacity-50 disabled:pointer-events-none"
+        >
+          Annuleren
         </button>
       </form>
     </motion.div>
