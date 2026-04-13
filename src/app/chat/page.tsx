@@ -177,7 +177,7 @@ export default function ChatPage() {
     <div className="flex h-dvh min-h-0 max-h-dvh flex-col overflow-hidden bg-chat-canvas">
       {isBootLoading ? (
         <div className="flex min-h-0 flex-1 items-center justify-center">
-          <LoadingState message="Even inladen..." />
+          <LoadingState />
         </div>
       ) : (
         <>

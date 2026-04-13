@@ -29,7 +29,7 @@ export default function LoginPage() {
       </div>
 
       <div className="safe-bottom py-4 text-center">
-        <p className="text-xs text-[#5F7382]/60">AllPhi Fleet Companion</p>
+        <p className="text-xs text-[#5F7382]/60">Fleet Companion</p>
       </div>
     </div>
   );

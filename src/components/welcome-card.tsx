@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot, Car, FileText, Zap, ClipboardList } from "lucide-react";
+import { Bot as LuBot, Car, FileText, Zap, ClipboardList } from "lucide-react";
 
 interface WelcomeCardProps {
   voornaam?: string;
@@ -27,7 +27,7 @@ export function WelcomeCard({ voornaam, onAction }: WelcomeCardProps) {
     >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm">
-          <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
+          <LuBot className="h-5 w-5 text-white" strokeWidth={1.75} aria-hidden />
         </div>
         <div className="min-w-0 flex-1 space-y-3">
           <div className="rounded-[8px] rounded-bl-[3px] bg-white px-3 py-2 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">

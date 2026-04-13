@@ -29,7 +29,7 @@ export default function SetPasswordPage() {
       </div>
 
       <div className="text-center py-4">
-        <p className="text-xs text-[#5F7382]/60">AllPhi Fleet Companion</p>
+        <p className="text-xs text-[#5F7382]/60">Fleet Companion</p>
       </div>
     </div>
   );

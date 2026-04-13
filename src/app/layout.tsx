@@ -18,7 +18,7 @@ const karla = Karla({
 });
 
 export const metadata: Metadata = {
-  title: "AllPhi Fleet Companion",
+  title: "Fleet Companion",
   description: "Jouw persoonlijke fleet assistent — snel antwoord op al je wagenvragen.",
   manifest: "/manifest.json",
   applicationName: "Fleet Companion",
@@ -28,8 +28,11 @@ export const metadata: Metadata = {
     address: false,
   },
   icons: {
-    icon: [{ url: "/icons/allphi-logo.png", type: "image/png", sizes: "512x512" }],
-    apple: [{ url: "/icons/allphi-logo.png", sizes: "180x180", type: "image/png" }],
+    icon: [
+      { url: "/icons/app-icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/app-icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,

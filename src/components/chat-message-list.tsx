@@ -2,9 +2,18 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Bot, Paperclip } from "lucide-react";
+import { Bot as LuBot, Paperclip } from "lucide-react";
 import type { ChatAttachment, ChatMessage } from "@/types/chat";
 import { AssistantResponseCard } from "./assistant-response-card";
+
+/** Altijd hetzelfde bot-icoon (22px); alleen de badge-container wijzigen bij stijltests. */
+const ASSISTANT_AVATAR_ICON = "h-[22px] w-[22px] text-[#1E7AB0]" as const;
+
+/**
+ * Eerdere voorkeur — gradient squircle (alleen container; icoon blijft ASSISTANT_AVATAR_ICON):
+ * container: rounded-xl bg-gradient-to-br from-[#2799D7] to-[#135d8a] shadow-[0_2px_8px_rgba(19,93,138,0.28)]
+ * (icoon op donker vlak: zou dan text-white + drop-shadow vereisen — alleen gebruiken als container donker is)
+ */
 
 interface ChatMessageListProps {
   messages: ChatMessage[];
@@ -33,7 +42,11 @@ export function ChatMessageList({
           transition={{ duration: 0.2 }}
         >
           {msg.role === "user" ? (
-            <UserBubble content={msg.content} attachments={msg.attachments} />
+            <UserBubble
+              content={msg.content}
+              attachments={msg.attachments}
+              timestamp={msg.timestamp}
+            />
           ) : (
             <AssistantBubble message={msg} />
           )}
@@ -47,9 +60,7 @@ export function ChatMessageList({
           className="flex w-full min-w-0 justify-start"
         >
           <div className="flex min-w-0 w-full items-start justify-start gap-2">
-            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm">
-              <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
-            </div>
+            <AssistantAvatarBadge />
             <div className="min-w-0 max-w-[min(100%,42rem)]">
               <AssistantSpeechBubble>
                 <div className="flex min-w-[72px] items-center justify-center gap-1 px-1 py-0.5">
@@ -68,12 +79,65 @@ export function ChatMessageList({
   );
 }
 
+function AssistantAvatarBadge() {
+  return (
+    <div
+      className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#2799D7]/25 bg-gradient-to-br from-white to-[#E8F4FB] shadow-[0_2px_8px_rgba(39,153,215,0.14)]"
+      aria-hidden
+    >
+      <LuBot className={ASSISTANT_AVATAR_ICON} strokeWidth={1.85} aria-hidden />
+    </div>
+  );
+}
+
+function formatMessageTime(date: Date): string {
+  return new Intl.DateTimeFormat("nl-NL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function UserAttachmentRow({ a }: { a: ChatAttachment }) {
+  return (
+    <li className="space-y-1.5 text-[13px] leading-snug text-[#5F7382]">
+      <div className="flex items-center gap-1.5">
+        <Paperclip
+          className="h-3.5 w-3.5 shrink-0 text-[#2799D7]"
+          strokeWidth={2}
+          aria-hidden
+        />
+        {a.url ? (
+          <a
+            href={a.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 truncate text-[#2799D7] underline decoration-[#2799D7]/35 underline-offset-2 [overflow-wrap:anywhere] hover:decoration-[#2799D7]"
+          >
+            {a.name}
+          </a>
+        ) : (
+          <span className="min-w-0 truncate [overflow-wrap:anywhere]">{a.name}</span>
+        )}
+      </div>
+      {a.url && a.mime?.startsWith("image/") && (
+        <img
+          src={a.url}
+          alt=""
+          className="max-h-40 w-auto max-w-full rounded-lg border border-[#0000000d] object-contain"
+        />
+      )}
+    </li>
+  );
+}
+
 function UserBubble({
   content,
   attachments,
+  timestamp,
 }: {
   content: string;
   attachments?: ChatAttachment[];
+  timestamp: Date;
 }) {
   const hasText = content.trim().length > 0;
   const hasFiles = (attachments?.length ?? 0) > 0;
@@ -84,55 +148,40 @@ function UserBubble({
       <div className="flex w-fit max-w-[min(92%,42rem)] shrink-0 flex-col items-end sm:max-w-[min(85%,42rem)]">
         <UserSpeechBubble>
           {hasText && (
-            <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere]">
-              {content}
-            </p>
+            <div className="flex min-w-0 items-end gap-x-2">
+              <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-left text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere]">
+                {content}
+              </p>
+              <time
+                dateTime={timestamp.toISOString()}
+                className="shrink-0 pb-px text-[11px] leading-none tabular-nums text-[#5F7382]/90"
+              >
+                {formatMessageTime(timestamp)}
+              </time>
+            </div>
           )}
-          {hasFiles && (
-            <ul
-              className={
-                hasText
-                  ? "mt-2 space-y-1 border-t border-[#163247]/10 pt-2"
-                  : "space-y-1"
-              }
-            >
-              {attachments!.map((a, i) => (
-                <li
-                  key={`${a.name}-${i}`}
-                  className="space-y-1.5 text-[13px] leading-snug text-[#5F7382]"
+          {hasFiles &&
+            (hasText ? (
+              <ul className="mt-2 space-y-1 border-t border-[#163247]/10 pt-2">
+                {attachments!.map((a, i) => (
+                  <UserAttachmentRow key={`${a.name}-${i}`} a={a} />
+                ))}
+              </ul>
+            ) : (
+              <div className="flex min-w-0 items-end gap-x-2">
+                <ul className="min-w-0 flex-1 space-y-1">
+                  {attachments!.map((a, i) => (
+                    <UserAttachmentRow key={`${a.name}-${i}`} a={a} />
+                  ))}
+                </ul>
+                <time
+                  dateTime={timestamp.toISOString()}
+                  className="shrink-0 pb-px text-[11px] leading-none tabular-nums text-[#5F7382]/90"
                 >
-                  <div className="flex items-center gap-1.5">
-                    <Paperclip
-                      className="h-3.5 w-3.5 shrink-0 text-[#2799D7]"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                    {a.url ? (
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-w-0 truncate text-[#2799D7] underline decoration-[#2799D7]/35 underline-offset-2 [overflow-wrap:anywhere] hover:decoration-[#2799D7]"
-                      >
-                        {a.name}
-                      </a>
-                    ) : (
-                      <span className="min-w-0 truncate [overflow-wrap:anywhere]">
-                        {a.name}
-                      </span>
-                    )}
-                  </div>
-                  {a.url && a.mime?.startsWith("image/") && (
-                    <img
-                      src={a.url}
-                      alt=""
-                      className="max-h-40 w-auto max-w-full rounded-lg border border-[#0000000d] object-contain"
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                  {formatMessageTime(timestamp)}
+                </time>
+              </div>
+            ))}
         </UserSpeechBubble>
       </div>
     </div>
@@ -146,12 +195,7 @@ function AssistantBubble({ message }: { message: ChatMessage }) {
     <div className="flex w-full min-w-0 flex-col justify-start gap-2">
       {/* Avatar alleen naast de tekstballon — niet meeschalen met infokaarten */}
       <div className="flex w-full min-w-0 items-start justify-start gap-2">
-        <div
-          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm"
-          aria-hidden
-        >
-          <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
-        </div>
+        <AssistantAvatarBadge />
         <div className="min-w-0 max-w-[min(100%,42rem)]">
           <AssistantSpeechBubble>
             <div
@@ -160,6 +204,12 @@ function AssistantBubble({ message }: { message: ChatMessage }) {
                 __html: formatMarkdown(message.content),
               }}
             />
+            <time
+              dateTime={message.timestamp.toISOString()}
+              className="mt-2 block text-right text-[11px] leading-none tabular-nums text-[#5F7382]/90"
+            >
+              {formatMessageTime(message.timestamp)}
+            </time>
           </AssistantSpeechBubble>
         </div>
       </div>
