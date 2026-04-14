@@ -105,17 +105,64 @@ async function processIcon() {
     .png()
     .toBuffer();
 
+  // Flatten op merkblauw zodat transparantie geen "zwarte rand" toont
+  // op platformen die icons op een donkere achtergrond renderen.
+  const brandBlue = "#2799D7";
+  const png512Square = await sharp({
+    create: {
+      width: 512,
+      height: 512,
+      channels: 4,
+      background: brandBlue,
+    },
+  })
+    .composite([{ input: png512 }])
+    .png()
+    .toBuffer();
+
+  // Normaliseer achtergrond naar exact merkblauw zodat subtiele halo/ringjes verdwijnen.
+  const { data: sqRaw } = await sharp(png512Square)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const normalized = new Uint8ClampedArray(sqRaw);
+  const bg = await sharp({
+    create: { width: 1, height: 1, channels: 4, background: brandBlue },
+  })
+    .raw()
+    .toBuffer();
+  const br = bg[0],
+    bgc = bg[1],
+    bb = bg[2];
+  for (let i = 0; i < 512 * 512; i++) {
+    const o = i * 4;
+    const r = normalized[o];
+    const g = normalized[o + 1];
+    const b = normalized[o + 2];
+    // Houd de witte phi, maak al de rest exact background.
+    if (r > 220 && g > 220 && b > 220) continue;
+    normalized[o] = br;
+    normalized[o + 1] = bgc;
+    normalized[o + 2] = bb;
+    normalized[o + 3] = 255;
+  }
+  const png512Final = await sharp(Buffer.from(normalized), {
+    raw: { width: 512, height: 512, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
   const out512 = join(root, "public/icons/app-icon-512.png");
   const out192 = join(root, "public/icons/app-icon-192.png");
 
-  writeFileSync(out512, png512);
-  await sharp(png512)
+  writeFileSync(out512, png512Final);
+  await sharp(png512Final)
     .resize(192, 192, { kernel: sharp.kernel.lanczos3 })
     .png()
     .toFile(out192);
 
   const apple180 = join(root, "public/icons/apple-touch-icon.png");
-  await sharp(png512)
+  await sharp(png512Final)
     .resize(180, 180, { kernel: sharp.kernel.lanczos3 })
     .png()
     .toFile(apple180);
