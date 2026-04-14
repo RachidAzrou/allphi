@@ -133,6 +133,14 @@
     /* Vermindert browser “bounce” op het document; scroll blijft in panels (chat) mogelijk. */
     overscroll-behavior-y: none;
   }
+  /* iOS Safari/PWA: voorkom “input zoom” bij focus (native-gevoel bij typen). */
+  @supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-montserrat), system-ui, sans-serif;
   }
