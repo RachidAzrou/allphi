@@ -82,6 +82,8 @@ const CATEGORY_ICONS: Record<SituationCategoryId, LucideIcon> = {
 type OngevalWizardProps = {
   reportId: string;
   initialPayload: unknown;
+  /** Guest mode (partij B zonder login): secret uit QR/link */
+  guestSecret?: string | null;
   /** Chat-overlay: compacte layout en sluiten zonder route-wissel */
   embedded?: boolean;
   /** Bij embedded: terug/exit/voltooid sluiten het venster */
@@ -91,6 +93,7 @@ type OngevalWizardProps = {
 export function OngevalWizard({
   reportId,
   initialPayload,
+  guestSecret = null,
   embedded = false,
   onRequestClose,
 }: OngevalWizardProps) {
@@ -125,14 +128,26 @@ export function OngevalWizard({
     async (next: AccidentReportState) => {
       setSaving(true);
       try {
-        const { error } = await supabase
-          .from("ongeval_aangiften")
-          .update({
-            payload: next as unknown as Record<string, unknown>,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", reportId);
-        if (error) throw error;
+        if (guestSecret) {
+          const res = await fetch(
+            `/api/ongeval/${encodeURIComponent(reportId)}/guest`,
+            {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ secret: guestSecret, payload: next }),
+            },
+          );
+          if (!res.ok) throw new Error("guest_update_failed");
+        } else {
+          const { error } = await supabase
+            .from("ongeval_aangiften")
+            .update({
+              payload: next as unknown as Record<string, unknown>,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", reportId);
+          if (error) throw error;
+        }
       } catch (e) {
         console.error(e);
         toast.error("Opslaan mislukt. Probeer opnieuw.");
@@ -140,7 +155,7 @@ export function OngevalWizard({
         setSaving(false);
       }
     },
-    [reportId, supabase],
+    [guestSecret, reportId, supabase],
   );
 
   useEffect(() => {

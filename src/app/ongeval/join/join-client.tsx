@@ -44,13 +44,6 @@ export function JoinClient() {
     async (rid: string, secret: string) => {
       setStatus("joining");
       setError(null);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user?.id) {
-        router.replace("/login");
-        return;
-      }
 
       const { data, error: joinErr } = await supabase.rpc(
         "ongeval_join_with_secret",
@@ -64,7 +57,7 @@ export function JoinClient() {
         return;
       }
 
-      router.push(`/ongeval/${rid}`);
+      router.push(`/ongeval/${rid}?s=${encodeURIComponent(secret)}`);
     },
     [router, supabase],
   );

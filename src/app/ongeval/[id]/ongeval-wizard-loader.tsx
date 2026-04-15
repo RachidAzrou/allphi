@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { OngevalWizard } from "@/components/ongeval/ongeval-wizard";
 import { LoadingState } from "@/components/loading-state";
@@ -13,9 +14,11 @@ type OngevalWizardLoaderProps = {
 
 export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [payload, setPayload] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
+  const guestSecret = (searchParams?.get("s") ?? "").trim() || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -23,8 +26,28 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user?.id) {
+      if (!user?.id && !guestSecret) {
         router.replace("/login");
+        return;
+      }
+      if (!user?.id && guestSecret) {
+        const res = await fetch(
+          `/api/ongeval/${encodeURIComponent(reportId)}/guest?secret=${encodeURIComponent(
+            guestSecret,
+          )}`,
+          { cache: "no-store" },
+        );
+        const json = (await res.json().catch(() => null)) as unknown;
+        if (cancelled) return;
+        const payload =
+          typeof json === "object" && json !== null && "payload" in json
+            ? (json as { payload?: unknown }).payload
+            : null;
+        if (!res.ok || payload === null) {
+          setError("Dossier niet gevonden.");
+          return;
+        }
+        setPayload(payload);
         return;
       }
       const { data: row, error: qError } = await supabase
@@ -46,7 +69,7 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
     return () => {
       cancelled = true;
     };
-  }, [reportId, router, supabase]);
+  }, [guestSecret, reportId, router, supabase]);
 
   if (error) {
     return (
@@ -64,5 +87,11 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
     );
   }
 
-  return <OngevalWizard reportId={reportId} initialPayload={payload} />;
+  return (
+    <OngevalWizard
+      reportId={reportId}
+      initialPayload={payload}
+      guestSecret={guestSecret}
+    />
+  );
 }
