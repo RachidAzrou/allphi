@@ -50,6 +50,11 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
         setPayload(payload);
         return;
       }
+      const userId = user?.id;
+      if (!userId) {
+        router.replace("/login");
+        return;
+      }
       const { data: row, error: qError } = await supabase
         .from("ongeval_aangiften")
         .select("payload, user_id")
@@ -60,7 +65,7 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
         setError("Dossier niet gevonden.");
         return;
       }
-      if (row.user_id !== user.id) {
+      if (row.user_id !== userId) {
         setError("Geen toegang tot dit dossier.");
         return;
       }
