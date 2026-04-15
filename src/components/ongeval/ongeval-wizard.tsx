@@ -107,9 +107,18 @@ export function OngevalWizard({
     return raw;
   }, [searchParams]);
   const supabase = useMemo(() => createClient(), []);
-  const [state, setState] = useState<AccidentReportState>(() =>
-    mergePayloadIntoState(initialPayload),
-  );
+  const [state, setState] = useState<AccidentReportState>(() => {
+    const merged = mergePayloadIntoState(initialPayload);
+    // Guest join (partij B zonder login) moet in de B-flow starten,
+    // niet in de maker (partij A) flow.
+    if (!guestSecret) return merged;
+    return {
+      ...merged,
+      role: "B",
+      currentStepId: "party_b_language",
+      navigationHistory: [],
+    };
+  });
   const [exitOpen, setExitOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const skipPersistRef = useRef(true);
