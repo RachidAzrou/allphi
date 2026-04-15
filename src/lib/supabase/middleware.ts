@@ -32,12 +32,18 @@ export async function updateSession(request: NextRequest) {
   const isLoginPage = request.nextUrl.pathname === "/login";
   const isAuthCallback = request.nextUrl.pathname === "/auth/callback";
   const isPublicAuthApi = request.nextUrl.pathname.startsWith("/api/auth/");
+  const isGuestJoinFlow =
+    request.nextUrl.pathname === "/ongeval/join" ||
+    (request.nextUrl.pathname.startsWith("/ongeval/") &&
+      request.nextUrl.searchParams.has("s")) ||
+    request.nextUrl.pathname.includes("/api/ongeval/") ||
+    request.nextUrl.pathname.startsWith("/api/ongeval/");
   const isPublicAsset =
     request.nextUrl.pathname.startsWith("/_next") ||
     request.nextUrl.pathname.startsWith("/manifest") ||
     request.nextUrl.pathname.includes(".");
 
-  if (isPublicAsset || isAuthCallback || isPublicAuthApi) {
+  if (isPublicAsset || isAuthCallback || isPublicAuthApi || isGuestJoinFlow) {
     return supabaseResponse;
   }
 
