@@ -74,6 +74,8 @@ export async function handleIntent(
       const status = await getReimbursementStatusByEmail(email);
       return formatReimbursementResponse(status);
     }
+    case "accident_report":
+      return formatAccidentReportResponse();
     case "greeting":
       return formatGreeting(voornaam);
 
@@ -91,6 +93,19 @@ export async function handleIntent(
     default:
       return formatUnknown();
   }
+}
+
+function formatAccidentReportResponse(): ChatResponse {
+  return {
+    intent: "accident_report",
+    title: "Ongeval melden",
+    message:
+      "Dat klinkt stresserig — hopelijk is iedereen veilig.\n\n" +
+      "Voor een **Europees aanrijdingsformulier** kun je de **ongeval-wizard** starten: die opent in een venster boven deze chat en begeleidt je stap voor stap (plaats, partijen, toedracht, eventueel raakpunten en handtekeningen).\n\n" +
+      "Tik op de knop hieronder, of ga via het menu naar **Ongeval melden** voor de volledige pagina.",
+    suggestions: DEFAULT_SUGGESTIONS,
+    cta: { label: "Open ongeval-wizard", href: "/ongeval" },
+  };
 }
 
 function formatGreeting(voornaam?: string): ChatResponse {

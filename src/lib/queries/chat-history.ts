@@ -46,6 +46,7 @@ interface AssistantMsgMeta {
   title?: string;
   cards?: ChatMessage["cards"];
   suggestions?: string[];
+  cta?: ChatMessage["cta"];
 }
 
 export async function fetchChatMessagesForUser(
@@ -93,6 +94,7 @@ export async function fetchChatMessagesForUser(
         title: meta?.title,
         cards: meta?.cards,
         suggestions: meta?.suggestions,
+        cta: meta?.cta,
       });
     }
   }
@@ -136,6 +138,7 @@ export async function insertAssistantMessage(
       title: result.title,
       cards: result.cards,
       suggestions: result.suggestions,
+      cta: result.cta,
     },
   });
   if (error) throw error;

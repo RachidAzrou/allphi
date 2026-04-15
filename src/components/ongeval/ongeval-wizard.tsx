@@ -1,0 +1,2572 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  BadgeCheck,
+  Building2,
+  Car,
+  ChevronRight,
+  DoorOpen,
+  FilePenLine,
+  GitBranch,
+  Info,
+  Languages,
+  ParkingCircle,
+  QrCode,
+  RefreshCw,
+  ShieldAlert,
+  Smartphone,
+  SmartphoneNfc,
+  Split,
+  Truck,
+  UserCircle,
+  Users,
+} from "lucide-react";
+import { FcTwoSmartphones } from "react-icons/fc";
+import { toast } from "sonner";
+import QRCode from "qrcode";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { WizardFooterButton, WizardShell } from "@/components/ongeval/wizard-shell";
+import { ImpactDiagram } from "@/components/ongeval/impact-diagram";
+import { SignaturePad } from "@/components/ongeval/signature-pad";
+import { STEP_BANNERS } from "@/components/ongeval/step-banners";
+import {
+  advanceState,
+  getNextStepId,
+  getNextAfterOverviewSkip,
+  getPreviousStepId,
+  mergePayloadIntoState,
+  popHistory,
+  validateStep,
+} from "@/lib/ongeval/engine";
+import {
+  CENTER_LINE_OPTIONS,
+  GENERIC_SINGLE,
+  LANE_CHANGE_OPTIONS,
+  MANEUVER_A_OPTIONS,
+  MANEUVER_B_OPTIONS,
+  PRIORITY_OPTIONS,
+  REAR_END_OPTIONS,
+  SITUATION_CATEGORIES,
+} from "@/lib/ongeval/situations";
+import type {
+  AccidentReportState,
+  OngevalStepId,
+  SituationCategoryId,
+} from "@/types/ongeval";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const CATEGORY_ICONS: Record<SituationCategoryId, LucideIcon> = {
+  parking: ParkingCircle,
+  rear_end: Car,
+  maneuver: GitBranch,
+  priority: ShieldAlert,
+  lane_change: Split,
+  opposite: ArrowLeftRight,
+  door: DoorOpen,
+  load: Truck,
+};
+
+type OngevalWizardProps = {
+  reportId: string;
+  initialPayload: unknown;
+  /** Chat-overlay: compacte layout en sluiten zonder route-wissel */
+  embedded?: boolean;
+  /** Bij embedded: terug/exit/voltooid sluiten het venster */
+  onRequestClose?: () => void;
+};
+
+export function OngevalWizard({
+  reportId,
+  initialPayload,
+  embedded = false,
+  onRequestClose,
+}: OngevalWizardProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = useMemo(() => {
+    const raw = searchParams?.get("returnTo");
+    if (!raw) return null;
+    // Keep it simple and safe: only allow internal absolute paths.
+    if (!raw.startsWith("/")) return null;
+    return raw;
+  }, [searchParams]);
+  const supabase = useMemo(() => createClient(), []);
+  const [state, setState] = useState<AccidentReportState>(() =>
+    mergePayloadIntoState(initialPayload),
+  );
+  const [exitOpen, setExitOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const skipPersistRef = useRef(true);
+  const localEditAtRef = useRef(0);
+  const [joinSecret, setJoinSecret] = useState<string | null>(null);
+  const [joinQrDataUrl, setJoinQrDataUrl] = useState<string | null>(null);
+  const [refreshingJoinQr, setRefreshingJoinQr] = useState(false);
+  const [partyBJoinedAt, setPartyBJoinedAt] = useState<string | null>(null);
+
+  const stepId = state.currentStepId;
+  const bannerKey = `banner_${stepId}`;
+  const bannerMessage = STEP_BANNERS[stepId];
+  const bannerDismissed = state.dismissedBanners[bannerKey] === true;
+
+  const persist = useCallback(
+    async (next: AccidentReportState) => {
+      setSaving(true);
+      try {
+        const { error } = await supabase
+          .from("ongeval_aangiften")
+          .update({
+            payload: next as unknown as Record<string, unknown>,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", reportId);
+        if (error) throw error;
+      } catch (e) {
+        console.error(e);
+        toast.error("Opslaan mislukt. Probeer opnieuw.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [reportId, supabase],
+  );
+
+  useEffect(() => {
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false;
+      return;
+    }
+    const t = setTimeout(() => {
+      void persist(state);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [state, persist]);
+
+  const updateState = useCallback((patch: Partial<AccidentReportState>) => {
+    localEditAtRef.current = Date.now();
+    setState((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`ongeval_aangiften:${reportId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ongeval_aangiften",
+          filter: `id=eq.${reportId}`,
+        },
+        (payload) => {
+          const nextRow = (payload as any)?.new as
+            | { payload?: unknown; party_b_joined_at?: string | null }
+            | undefined;
+          const remotePayload = nextRow?.payload as unknown;
+
+          // Track Party B join status (used to gate share_qr).
+          if (typeof nextRow?.party_b_joined_at === "string" || nextRow?.party_b_joined_at === null) {
+            setPartyBJoinedAt(nextRow.party_b_joined_at ?? null);
+          }
+
+          if (!remotePayload) return;
+          if (Date.now() - localEditAtRef.current < 1200) return;
+          setState((prev) => {
+            const merged = mergePayloadIntoState(remotePayload);
+            // Avoid unnecessary rerenders if payload is identical.
+            if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+            return merged;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [reportId, supabase]);
+
+  const ensureJoinQr = useCallback(
+    async (mode: "existing" | "rotate" = "existing") => {
+      if (mode === "rotate") setRefreshingJoinQr(true);
+      try {
+        let secret: string | null = null;
+
+        if (mode === "rotate") {
+          const nextSecret = Array.from(
+            crypto.getRandomValues(new Uint8Array(16)),
+          )
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+
+          const { data, error } = await supabase
+            .from("ongeval_aangiften")
+            .update({
+              join_secret: nextSecret,
+              party_b_user_id: null,
+              party_b_joined_at: null,
+            })
+            .eq("id", reportId)
+            .select("join_secret")
+            .maybeSingle();
+
+          if (error) throw error;
+          secret = ((data as any)?.join_secret as string | null) ?? nextSecret;
+          setPartyBJoinedAt(null);
+          toast.success("QR-code vernieuwd.");
+        } else {
+          const { data, error } = await supabase
+            .from("ongeval_aangiften")
+            .select("join_secret, party_b_joined_at")
+            .eq("id", reportId)
+            .maybeSingle();
+          if (error) return;
+          secret = (data as any)?.join_secret as string | null;
+          setPartyBJoinedAt(((data as any)?.party_b_joined_at as string | null) ?? null);
+        }
+
+        if (!secret) return;
+        setJoinSecret(secret);
+
+        const url = `${window.location.origin}/ongeval/join?rid=${reportId}&s=${encodeURIComponent(
+          secret,
+        )}`;
+        const png = await QRCode.toDataURL(url, {
+          errorCorrectionLevel: "M",
+          margin: 2,
+          width: 680,
+          color: {
+            dark: "#163247",
+            light: "#FFFFFF",
+          },
+        });
+        setJoinQrDataUrl(png);
+      } catch (e) {
+        console.error(e);
+        toast.error("QR-code vernieuwen mislukt.");
+      } finally {
+        if (mode === "rotate") setRefreshingJoinQr(false);
+      }
+    },
+    [reportId, supabase],
+  );
+
+  useEffect(() => {
+    if (stepId !== "share_qr") return;
+    void ensureJoinQr("existing");
+  }, [ensureJoinQr, stepId]);
+
+  const goNext = useCallback(() => {
+    if (!validateStep(stepId, state)) {
+      toast.error("Vul de verplichte velden in om verder te gaan.");
+      return;
+    }
+    const nextId = getNextStepId(stepId, state);
+    if (!nextId) return;
+    setState(advanceState(state, nextId));
+  }, [stepId, state]);
+
+  const goBack = useCallback(() => {
+    const prevId = getPreviousStepId(state);
+    if (prevId) {
+      setState(popHistory(state));
+      return;
+    }
+    if (onRequestClose) {
+      onRequestClose();
+      return;
+    }
+    router.push(returnTo ?? "/ongeval");
+  }, [state, router, onRequestClose, returnTo]);
+
+  const dismissBanner = useCallback(() => {
+    updateState({
+      dismissedBanners: { ...state.dismissedBanners, [bannerKey]: true },
+    });
+  }, [bannerKey, state.dismissedBanners, updateState]);
+
+  const handleExit = useCallback(() => {
+    setExitOpen(true);
+  }, []);
+
+  const confirmExit = useCallback(() => {
+    setExitOpen(false);
+    if (onRequestClose) {
+      onRequestClose();
+      return;
+    }
+    router.push(returnTo ?? "/chat");
+  }, [router, onRequestClose, returnTo]);
+
+  useEffect(() => {
+    setState((s) => {
+      const hasDate = s.location.datum.trim().length > 0;
+      const hasTime = s.location.tijd.trim().length > 0;
+      if (hasDate && hasTime) return s;
+      const d = new Date();
+      return {
+        ...s,
+        location: {
+          ...s.location,
+          datum: hasDate ? s.location.datum : d.toLocaleDateString("nl-BE"),
+          tijd: hasTime
+            ? s.location.tijd
+            : d.toLocaleTimeString("nl-BE", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+        },
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const email = user?.email ?? "";
+      if (!email) return;
+
+      const { data: medewerker } = await supabase
+        .from("medewerkers")
+        .select(
+          "id, voornaam, naam, emailadres, telefoonnummer, geboortedatum, straat, huisnummer, bus, postcode, stad, land",
+        )
+        .ilike("emailadres", email)
+        .maybeSingle();
+
+      const { data: vctx } = await supabase
+        .from("v_fleet_assistant_context")
+        .select("nummerplaat, merk_model, insurance_company, policy_number")
+        .eq("emailadres", email)
+        .maybeSingle();
+
+      const { data: company } = await supabase
+        .from("company_profile")
+        .select(
+          "name, contact_first_name, enterprise_number, street, house_number, box, postal_code, city, country",
+        )
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      setState((prev) => {
+        const next = { ...prev };
+
+        const toEuropeanDate = (value: string) => {
+          const v = value.trim();
+          // Supabase date columns often arrive as "YYYY-MM-DD"
+          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+          if (!m) return value;
+          const [, yyyy, mm, dd] = m;
+          return `${dd}/${mm}/${yyyy}`;
+        };
+
+        // Prefill employee driver basics
+        if ((medewerker as any)?.voornaam && !next.employeeDriver.voornaam) {
+          next.employeeDriver = {
+            ...next.employeeDriver,
+            voornaam: String((medewerker as any).voornaam ?? ""),
+          };
+        }
+        if ((medewerker as any)?.naam && !next.employeeDriver.naam) {
+          next.employeeDriver = {
+            ...next.employeeDriver,
+            naam: String((medewerker as any).naam ?? ""),
+          };
+        }
+        if (email && !next.employeeDriver.email) {
+          next.employeeDriver = { ...next.employeeDriver, email };
+        }
+        if ((medewerker as any)?.telefoonnummer && !next.employeeDriver.telefoon) {
+          next.employeeDriver = {
+            ...next.employeeDriver,
+            telefoon: String((medewerker as any).telefoonnummer ?? ""),
+          };
+        }
+
+        const geboortedatum =
+          typeof (medewerker as any)?.geboortedatum === "string"
+            ? String((medewerker as any).geboortedatum)
+            : "";
+        if (geboortedatum && !next.employeeDriver.geboortedatum) {
+          next.employeeDriver = {
+            ...next.employeeDriver,
+            geboortedatum: toEuropeanDate(geboortedatum),
+          };
+        }
+
+        const maybeSetAddress = (key: string, value: unknown) => {
+          if (typeof value !== "string") return;
+          if (!value.trim()) return;
+          if ((next.employeeDriver.adres as any)[key]?.trim?.()) return;
+          next.employeeDriver = {
+            ...next.employeeDriver,
+            adres: { ...next.employeeDriver.adres, [key]: value },
+          };
+        };
+        maybeSetAddress("straat", (medewerker as any)?.straat);
+        maybeSetAddress("huisnummer", (medewerker as any)?.huisnummer);
+        maybeSetAddress("bus", (medewerker as any)?.bus);
+        maybeSetAddress("postcode", (medewerker as any)?.postcode);
+        maybeSetAddress("stad", (medewerker as any)?.stad);
+        maybeSetAddress("land", (medewerker as any)?.land);
+
+        // When the employee is the driver, also prefill partyA.bestuurder (used in overview/PDF).
+        if (next.driverWasEmployee !== false) {
+          const b = next.partyA.bestuurder;
+          const ed = next.employeeDriver;
+
+          const setBestuurderIfEmpty = (
+            key: keyof typeof b,
+            value: unknown,
+          ) => {
+            if (typeof value !== "string") return;
+            if (!value.trim()) return;
+            if (String((b as any)[key] ?? "").trim()) return;
+            next.partyA = {
+              ...next.partyA,
+              bestuurder: { ...next.partyA.bestuurder, [key]: value },
+            };
+          };
+
+          setBestuurderIfEmpty("voornaam", ed.voornaam);
+          setBestuurderIfEmpty("naam", ed.naam);
+          setBestuurderIfEmpty("geboortedatum", toEuropeanDate(ed.geboortedatum));
+          setBestuurderIfEmpty("email", ed.email);
+          setBestuurderIfEmpty("telefoon", ed.telefoon);
+          setBestuurderIfEmpty("rijbewijsNummer", ed.rijbewijsNummer);
+
+          const ba = next.partyA.bestuurder.adres;
+          const ea = ed.adres;
+          const setBestuurderAdresIfEmpty = (k: keyof typeof ba, v: unknown) => {
+            if (typeof v !== "string") return;
+            if (!v.trim()) return;
+            if (String((ba as any)[k] ?? "").trim()) return;
+            next.partyA = {
+              ...next.partyA,
+              bestuurder: {
+                ...next.partyA.bestuurder,
+                adres: { ...next.partyA.bestuurder.adres, [k]: v },
+              },
+            };
+          };
+
+          setBestuurderAdresIfEmpty("straat", ea.straat);
+          setBestuurderAdresIfEmpty("huisnummer", ea.huisnummer);
+          setBestuurderAdresIfEmpty("bus", ea.bus);
+          setBestuurderAdresIfEmpty("postcode", ea.postcode);
+          setBestuurderAdresIfEmpty("stad", ea.stad);
+          setBestuurderAdresIfEmpty("land", ea.land);
+        }
+
+        // Policyholder is always company: keep fields blank unless user filled them.
+        if (company && typeof company === "object") {
+          const cp = company as any;
+          const current = next.partyA.verzekeringsnemer;
+
+          const setIfEmpty = (key: keyof typeof current, value: unknown) => {
+            if (typeof value !== "string") return;
+            if (!value.trim()) return;
+            if (String((current as any)[key] ?? "").trim()) return;
+            next.partyA = {
+              ...next.partyA,
+              verzekeringsnemer: { ...next.partyA.verzekeringsnemer, [key]: value },
+            };
+          };
+
+          setIfEmpty("naam", cp.name);
+          setIfEmpty("voornaam", cp.contact_first_name);
+          setIfEmpty("ondernemingsnummer", cp.enterprise_number);
+
+          const ca = next.partyA.verzekeringsnemer.adres;
+          const setAddrIfEmpty = (k: keyof typeof ca, v: unknown) => {
+            if (typeof v !== "string") return;
+            if (!v.trim()) return;
+            if (String((ca as any)[k] ?? "").trim()) return;
+            next.partyA = {
+              ...next.partyA,
+              verzekeringsnemer: {
+                ...next.partyA.verzekeringsnemer,
+                adres: { ...next.partyA.verzekeringsnemer.adres, [k]: v },
+              },
+            };
+          };
+
+          setAddrIfEmpty("straat", cp.street);
+          setAddrIfEmpty("huisnummer", cp.house_number);
+          setAddrIfEmpty("bus", cp.box);
+          setAddrIfEmpty("postcode", cp.postal_code);
+          setAddrIfEmpty("stad", cp.city);
+          setAddrIfEmpty("land", cp.country);
+        }
+
+        // Prefill vehicle
+        const nummerplaat =
+          typeof (vctx as any)?.nummerplaat === "string"
+            ? String((vctx as any).nummerplaat)
+            : "";
+        const merkModel =
+          typeof (vctx as any)?.merk_model === "string"
+            ? String((vctx as any).merk_model)
+            : "";
+        const insuranceCompany =
+          typeof (vctx as any)?.insurance_company === "string"
+            ? String((vctx as any).insurance_company)
+            : "";
+        const policyNumber =
+          typeof (vctx as any)?.policy_number === "string"
+            ? String((vctx as any).policy_number)
+            : "";
+
+        if (nummerplaat && !next.partyA.voertuig.nummerplaat) {
+          next.partyA = {
+            ...next.partyA,
+            voertuig: { ...next.partyA.voertuig, nummerplaat },
+          };
+        }
+        if (merkModel && !next.partyA.voertuig.merkModel) {
+          next.partyA = {
+            ...next.partyA,
+            voertuig: { ...next.partyA.voertuig, merkModel },
+          };
+        }
+        if (insuranceCompany && !next.partyA.verzekering.maatschappij) {
+          next.partyA = {
+            ...next.partyA,
+            verzekering: {
+              ...next.partyA.verzekering,
+              maatschappij: insuranceCompany,
+            },
+          };
+        }
+        if (policyNumber && !next.partyA.verzekering.polisnummer) {
+          next.partyA = {
+            ...next.partyA,
+            verzekering: { ...next.partyA.verzekering, polisnummer: policyNumber },
+          };
+        }
+
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  function renderPartyBForm() {
+    const p = state.partyB;
+    return (
+      <div className="flex flex-col gap-6 px-4 py-6">
+        <div className="rounded-2xl border border-[#2799D7]/12 bg-gradient-to-br from-[#F7F9FC] to-white px-4 py-4 shadow-sm">
+          <p className="text-[14px] leading-relaxed text-[#5F7382]">
+            Vul enkel de gegevens in die je zeker weet. Je kunt dit later nog
+            aanvullen in het overzicht.
+          </p>
+        </div>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+            Verzekeringsnemer / verzekerde (partij B)
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Voornaam">
+              <Input
+                value={p.verzekeringsnemer.voornaam}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        voornaam: e.target.value,
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Naam">
+              <Input
+                value={p.verzekeringsnemer.naam}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        naam: e.target.value,
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <Field label="Straat">
+            <Input
+              value={p.verzekeringsnemer.adres.straat}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    verzekeringsnemer: {
+                      ...p.verzekeringsnemer,
+                      adres: { ...p.verzekeringsnemer.adres, straat: e.target.value },
+                    },
+                  },
+                })
+              }
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="Huisnr.">
+              <Input
+                value={p.verzekeringsnemer.adres.huisnummer}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        adres: { ...p.verzekeringsnemer.adres, huisnummer: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Bus">
+              <Input
+                value={p.verzekeringsnemer.adres.bus}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        adres: { ...p.verzekeringsnemer.adres, bus: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Postcode">
+              <Input
+                value={p.verzekeringsnemer.adres.postcode}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        adres: { ...p.verzekeringsnemer.adres, postcode: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Stad">
+              <Input
+                value={p.verzekeringsnemer.adres.stad}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        adres: { ...p.verzekeringsnemer.adres, stad: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Land">
+              <Input
+                value={p.verzekeringsnemer.adres.land}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      verzekeringsnemer: {
+                        ...p.verzekeringsnemer,
+                        adres: { ...p.verzekeringsnemer.adres, land: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+            Verzekering (partij B)
+          </h3>
+          <Field label="Verzekeringsmaatschappij">
+            <Input
+              value={p.verzekering.maatschappij}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    verzekering: { ...p.verzekering, maatschappij: e.target.value },
+                  },
+                })
+              }
+            />
+          </Field>
+          <Field label="Polisnummer">
+            <Input
+              value={p.verzekering.polisnummer}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    verzekering: { ...p.verzekering, polisnummer: e.target.value },
+                  },
+                })
+              }
+            />
+          </Field>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+            Voertuig (partij B)
+          </h3>
+          <Field label="Merk & model">
+            <Input
+              value={p.voertuig.merkModel}
+              onChange={(e) =>
+                updateState({
+                  partyB: { ...p, voertuig: { ...p.voertuig, merkModel: e.target.value } },
+                })
+              }
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Nummerplaat">
+              <Input
+                value={p.voertuig.nummerplaat}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      voertuig: { ...p.voertuig, nummerplaat: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Land van inschrijving">
+              <Input
+                value={p.voertuig.landInschrijving}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      voertuig: { ...p.voertuig, landInschrijving: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderBody() {
+    switch (stepId) {
+      case "driver_select":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={UserCircle}
+              title="Ik was de bestuurder"
+              description="We vullen je gegevens in vanuit je profiel (je kunt ze nog aanpassen)."
+              onClick={() => {
+                const next = { ...state, driverWasEmployee: true };
+                setState(advanceState(next, "driver_employee_form"));
+              }}
+            />
+            <ModeCard
+              icon={Users}
+              title="Een andere bestuurder"
+              description="Je vult de gegevens van de bestuurder in (bv. collega, partner, …)."
+              onClick={() => {
+                const next = { ...state, driverWasEmployee: false };
+                setState(advanceState(next, "driver_other_form"));
+              }}
+            />
+          </div>
+        );
+      case "driver_employee_form": {
+        const d = state.employeeDriver;
+        return (
+          <div className="flex flex-col gap-6 px-4 py-6">
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Persoonsgegevens
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Voornaam">
+                  <Input
+                    value={d.voornaam}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: { ...d, voornaam: e.target.value },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            voornaam: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Naam">
+                  <Input
+                    value={d.naam}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: { ...d, naam: e.target.value },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            naam: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Geboortedatum">
+                <Input
+                  placeholder="DD/MM/JJJJ"
+                  value={d.geboortedatum}
+                  onChange={(e) =>
+                    updateState({
+                      employeeDriver: { ...d, geboortedatum: e.target.value },
+                      partyA: {
+                        ...state.partyA,
+                        bestuurder: {
+                          ...state.partyA.bestuurder,
+                          geboortedatum: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Adres
+              </h3>
+              <Field label="Straat">
+                <Input
+                  value={d.adres.straat}
+                  onChange={(e) =>
+                    updateState({
+                      employeeDriver: {
+                        ...d,
+                        adres: { ...d.adres, straat: e.target.value },
+                      },
+                      partyA: {
+                        ...state.partyA,
+                        bestuurder: {
+                          ...state.partyA.bestuurder,
+                          adres: {
+                            ...state.partyA.bestuurder.adres,
+                            straat: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Huisnr.">
+                  <Input
+                    value={d.adres.huisnummer}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: {
+                          ...d,
+                          adres: { ...d.adres, huisnummer: e.target.value },
+                        },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            adres: {
+                              ...state.partyA.bestuurder.adres,
+                              huisnummer: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Bus">
+                  <Input
+                    value={d.adres.bus}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: {
+                          ...d,
+                          adres: { ...d.adres, bus: e.target.value },
+                        },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            adres: {
+                              ...state.partyA.bestuurder.adres,
+                              bus: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Postcode">
+                  <Input
+                    value={d.adres.postcode}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: {
+                          ...d,
+                          adres: { ...d.adres, postcode: e.target.value },
+                        },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            adres: {
+                              ...state.partyA.bestuurder.adres,
+                              postcode: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Stad">
+                  <Input
+                    value={d.adres.stad}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: {
+                          ...d,
+                          adres: { ...d.adres, stad: e.target.value },
+                        },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            adres: {
+                              ...state.partyA.bestuurder.adres,
+                              stad: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Land">
+                  <Input
+                    value={d.adres.land}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: {
+                          ...d,
+                          adres: { ...d.adres, land: e.target.value },
+                        },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            adres: {
+                              ...state.partyA.bestuurder.adres,
+                              land: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Rijbewijs
+              </h3>
+              <Field label="Rijbewijsnummer">
+                <Input
+                  value={d.rijbewijsNummer}
+                  onChange={(e) =>
+                    updateState({
+                      employeeDriver: { ...d, rijbewijsNummer: e.target.value },
+                      partyA: {
+                        ...state.partyA,
+                        bestuurder: {
+                          ...state.partyA.bestuurder,
+                          rijbewijsNummer: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+            </section>
+          </div>
+        );
+      }
+      case "driver_other_form": {
+        const d = state.otherDriver;
+        return (
+          <div className="flex flex-col gap-6 px-4 py-6">
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Persoonsgegevens
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Voornaam">
+                  <Input
+                    value={d.voornaam}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: { ...d, voornaam: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Naam">
+                  <Input
+                    value={d.naam}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: { ...d, naam: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Geboortedatum">
+                <Input
+                  placeholder="DD/MM/JJJJ"
+                  value={d.geboortedatum}
+                  onChange={(e) =>
+                    updateState({
+                      otherDriver: { ...d, geboortedatum: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Adres
+              </h3>
+              <Field label="Straat">
+                <Input
+                  value={d.adres.straat}
+                  onChange={(e) =>
+                    updateState({
+                      otherDriver: {
+                        ...d,
+                        adres: { ...d.adres, straat: e.target.value },
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Huisnr.">
+                  <Input
+                    value={d.adres.huisnummer}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: {
+                          ...d,
+                          adres: { ...d.adres, huisnummer: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Bus">
+                  <Input
+                    value={d.adres.bus}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: {
+                          ...d,
+                          adres: { ...d.adres, bus: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Postcode">
+                  <Input
+                    value={d.adres.postcode}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: {
+                          ...d,
+                          adres: { ...d.adres, postcode: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Stad">
+                  <Input
+                    value={d.adres.stad}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: {
+                          ...d,
+                          adres: { ...d.adres, stad: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Land">
+                  <Input
+                    value={d.adres.land}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: {
+                          ...d,
+                          adres: { ...d.adres, land: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Rijbewijs
+              </h3>
+              <Field label="Rijbewijsnummer">
+                <Input
+                  value={d.rijbewijsNummer}
+                  onChange={(e) =>
+                    updateState({
+                      otherDriver: { ...d, rijbewijsNummer: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </section>
+          </div>
+        );
+      }
+      case "policyholder_select":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={Building2}
+              title="Bedrijf"
+              description="De verzekeringsnemer is altijd het bedrijf (naam + adres)."
+              onClick={() => {
+                const next = {
+                  ...state,
+                  partyA: {
+                    ...state.partyA,
+                    verzekeringsnemerType: "company" as const,
+                  },
+                };
+                setState(advanceState(next, "policyholder_form"));
+              }}
+            />
+          </div>
+        );
+      case "policyholder_form": {
+        const p = state.partyA.verzekeringsnemer;
+        return (
+          <div className="flex flex-col gap-6 px-4 py-6">
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Bedrijfsgegevens
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Contactpersoon — optioneel">
+                  <Input
+                    value={p.voornaam}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: { ...p, voornaam: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Naam (bedrijf)">
+                  <Input
+                    value={p.naam}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: { ...p, naam: e.target.value },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label="Ondernemingsnummer">
+                <Input
+                  value={p.ondernemingsnummer}
+                  onChange={(e) =>
+                    updateState({
+                      partyA: {
+                        ...state.partyA,
+                        verzekeringsnemer: {
+                          ...p,
+                          ondernemingsnummer: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+                Adres
+              </h3>
+              <Field label="Straat">
+                <Input
+                  value={p.adres.straat}
+                  onChange={(e) =>
+                    updateState({
+                      partyA: {
+                        ...state.partyA,
+                        verzekeringsnemer: {
+                          ...p,
+                          adres: { ...p.adres, straat: e.target.value },
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="Huisnr.">
+                  <Input
+                    value={p.adres.huisnummer}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: {
+                            ...p,
+                            adres: { ...p.adres, huisnummer: e.target.value },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Bus">
+                  <Input
+                    value={p.adres.bus}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: {
+                            ...p,
+                            adres: { ...p.adres, bus: e.target.value },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Postcode">
+                  <Input
+                    value={p.adres.postcode}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: {
+                            ...p,
+                            adres: { ...p.adres, postcode: e.target.value },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Stad">
+                  <Input
+                    value={p.adres.stad}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: {
+                            ...p,
+                            adres: { ...p.adres, stad: e.target.value },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Land">
+                  <Input
+                    value={p.adres.land}
+                    onChange={(e) =>
+                      updateState({
+                        partyA: {
+                          ...state.partyA,
+                          verzekeringsnemer: {
+                            ...p,
+                            adres: { ...p.adres, land: e.target.value },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </section>
+          </div>
+        );
+      }
+      case "insurer_select": {
+        const ins = state.partyA.verzekering;
+        return (
+          <div className="flex flex-col gap-3 px-4 py-6">
+            <Field label="Verzekeringsmaatschappij">
+              <Input
+                value={ins.maatschappij}
+                onChange={(e) =>
+                  updateState({
+                    partyA: {
+                      ...state.partyA,
+                      verzekering: { ...ins, maatschappij: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Polisnummer">
+              <Input
+                value={ins.polisnummer}
+                onChange={(e) =>
+                  updateState({
+                    partyA: {
+                      ...state.partyA,
+                      verzekering: { ...ins, polisnummer: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        );
+      }
+      case "vehicle_confirm": {
+        const v = state.partyA.voertuig;
+        return (
+          <div className="flex flex-col gap-3 px-4 py-6">
+            <Field label="Merk & model">
+              <Input
+                value={v.merkModel}
+                onChange={(e) =>
+                  updateState({
+                    partyA: {
+                      ...state.partyA,
+                      voertuig: { ...v, merkModel: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Nummerplaat">
+              <Input
+                value={v.nummerplaat}
+                onChange={(e) =>
+                  updateState({
+                    partyA: {
+                      ...state.partyA,
+                      voertuig: { ...v, nummerplaat: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Land van inschrijving">
+              <Input
+                value={v.landInschrijving}
+                onChange={(e) =>
+                  updateState({
+                    partyA: {
+                      ...state.partyA,
+                      voertuig: { ...v, landInschrijving: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+        );
+      }
+      case "parties_count":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={UserCircle}
+              title="1 partij aanwezig"
+              description="Je bent alleen aanwezig en vult het dossier in."
+              onClick={() => {
+                const next = {
+                  ...state,
+                  partiesCount: 1 as const,
+                  wantsFillPartyB: null,
+                };
+                setState(advanceState(next, "devices_count"));
+              }}
+            />
+            <ModeCard
+              icon={Users}
+              title="2 partijen aanwezig"
+              description="Partij A en B zijn aanwezig om het dossier in te vullen."
+              onClick={() => {
+                const next = {
+                  ...state,
+                  partiesCount: 2 as const,
+                  wantsFillPartyB: null,
+                };
+                setState(advanceState(next, "devices_count"));
+              }}
+            />
+          </div>
+        );
+      case "devices_count":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={Smartphone}
+              title="Eén toestel"
+              description="Je vult alles in op één toestel."
+              onClick={() => {
+                const next = { ...state, devicesCount: 1 as const, role: null };
+                setState(advanceState(next, "party_b_language"));
+              }}
+            />
+            <ModeCard
+              icon={FcTwoSmartphones}
+              title="Twee toestellen"
+              description="Partij A en B vullen mee in op hun eigen toestel (QR-link)."
+              onClick={() => {
+                const next = { ...state, devicesCount: 2 as const };
+                setState(advanceState(next, "role_select"));
+              }}
+            />
+          </div>
+        );
+      case "role_select":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={BadgeCheck}
+              title="Rol A — maakt het rapport"
+              description="Je start de aangifte en deelt een QR-code met partij B."
+              onClick={() => {
+                const next = { ...state, role: "A" as const };
+                setState(advanceState(next, "share_qr"));
+              }}
+            />
+            <ModeCard
+              icon={QrCode}
+              title="Rol B — assisteert"
+              description="Je scant de QR-code van partij A en vult mee in."
+              onClick={() => {
+                toast.message("Open de koppelpagina om te scannen.");
+                router.push("/ongeval/join");
+              }}
+            />
+          </div>
+        );
+      case "share_qr":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-6 md:max-w-2xl">
+            <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
+              <div className="flex items-center justify-between gap-2 border-b border-black/[0.06] bg-[#F7F9FC] px-4 py-3">
+                <div className="flex min-w-0 items-start gap-2">
+                  <Info
+                    className="mt-[2px] size-4 shrink-0 text-[#2799D7]"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <p className="min-w-0 text-[14px] font-semibold leading-snug text-[#163247]">
+                      Laat partij B deze QR-code scannen om mee in te vullen.
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-[#5F7382]">
+                      {partyBJoinedAt ? "Partij B is gekoppeld." : "Wachten op partij B…"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Vernieuw QR-code"
+                  className="inline-flex items-center text-[#2799D7]"
+                  onClick={() => void ensureJoinQr("rotate")}
+                  disabled={refreshingJoinQr}
+                >
+                  <RefreshCw className="size-4" strokeWidth={2} aria-hidden />
+                  <span className="sr-only">Vernieuw</span>
+                </button>
+              </div>
+              <div className="p-4">
+                {joinQrDataUrl ? (
+                  <div className="rounded-2xl border border-black/[0.06] bg-[#F7F9FC] p-5 md:p-6">
+                    <img
+                      src={joinQrDataUrl}
+                      alt="QR-code om dossier te koppelen"
+                      className="mx-auto w-full max-w-[360px] rounded-lg bg-white md:max-w-[420px]"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex min-h-[240px] items-center justify-center text-[14px] text-[#5F7382]">
+                    QR-code wordt geladen…
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      case "scan_qr":
+        return (
+          <div className="px-4 py-10 text-center text-[15px] text-[#5F7382]">
+            QR scannen wordt zo meteen toegevoegd in de volgende stap.
+          </div>
+        );
+      case "party_b_language":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <ModeCard
+              icon={Languages}
+              title="Nederlands"
+              description="Partij B gebruikt Nederlands."
+              onClick={() =>
+                setState(
+                  advanceState(
+                    { ...state, partyBLanguage: "nl" as const },
+                    "party_b_optional",
+                  ),
+                )
+              }
+            />
+            <ModeCard
+              icon={Languages}
+              title="Frans"
+              description="Partij B gebruikt Frans."
+              onClick={() =>
+                setState(
+                  advanceState(
+                    { ...state, partyBLanguage: "fr" as const },
+                    "party_b_optional",
+                  ),
+                )
+              }
+            />
+            <ModeCard
+              icon={Languages}
+              title="Engels"
+              description="Partij B gebruikt Engels."
+              onClick={() =>
+                setState(
+                  advanceState(
+                    { ...state, partyBLanguage: "en" as const },
+                    "party_b_optional",
+                  ),
+                )
+              }
+            />
+          </div>
+        );
+      case "party_b_optional":
+        if (state.partiesCount !== 1) {
+          return (
+            <div className="px-4 py-10 text-center text-[15px] text-[#5F7382]">
+              Partij B vult mee in via het tweede toestel.
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col gap-6 px-4 py-10">
+            <p className="text-center text-[15px] leading-relaxed text-[#163247]">
+              Wil je nu al bepaalde gegevens van partij B invullen?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setState(advanceState({ ...state, wantsFillPartyB: true }, "party_b_form"))
+                }
+                className="min-h-[88px] min-w-[120px] rounded-2xl border border-[#2799D7]/25 bg-white px-4 text-[16px] font-semibold text-[#2799D7] shadow-sm transition-all hover:border-[#2799D7]/40 hover:shadow-md active:scale-[0.995]"
+              >
+                Ja
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setState(advanceState({ ...state, wantsFillPartyB: false }, "location_time"))
+                }
+                className="min-h-[88px] min-w-[120px] rounded-2xl border border-black/[0.08] bg-white px-4 text-[16px] font-semibold text-[#163247] shadow-sm transition-all hover:border-black/[0.14] hover:shadow-md active:scale-[0.995]"
+              >
+                Nee
+              </button>
+            </div>
+          </div>
+        );
+      case "party_b_form":
+        return renderPartyBForm();
+      case "location_time":
+        return (
+          <div className="flex flex-col gap-3 px-4 py-4">
+            <Field label="Straat">
+              <Input
+                value={state.location.straat}
+                onChange={(e) =>
+                  updateState({
+                    location: { ...state.location, straat: e.target.value },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Huisnummer">
+              <Input
+                value={state.location.huisnummer}
+                onChange={(e) =>
+                  updateState({
+                    location: { ...state.location, huisnummer: e.target.value },
+                  })
+                }
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Postcode">
+                <Input
+                  value={state.location.postcode}
+                  onChange={(e) =>
+                    updateState({
+                      location: { ...state.location, postcode: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Stad">
+                <Input
+                  value={state.location.stad}
+                  onChange={(e) =>
+                    updateState({
+                      location: { ...state.location, stad: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+            <Field label="Land">
+              <Input
+                value={state.location.land}
+                onChange={(e) =>
+                  updateState({
+                    location: { ...state.location, land: e.target.value },
+                  })
+                }
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Datum">
+                <Input
+                  type="text"
+                  placeholder="DD/MM/JJJJ"
+                  value={state.location.datum}
+                  onChange={(e) =>
+                    updateState({
+                      location: { ...state.location, datum: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Uur">
+                <Input
+                  type="text"
+                  placeholder="UU:MM"
+                  value={state.location.tijd}
+                  onChange={(e) =>
+                    updateState({
+                      location: { ...state.location, tijd: e.target.value },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          </div>
+        );
+      case "injuries_material":
+        return (
+          <div className="flex flex-col gap-6 px-4 py-8">
+            <YesNoBlock
+              label="Zijn er gewonden?"
+              value={state.gewonden}
+              onChange={(v) => updateState({ gewonden: v })}
+            />
+            <YesNoBlock
+              label="Is er materiële schade aan andere voorwerpen dan de voertuigen A en B?"
+              value={state.materieleSchadeAnders}
+              onChange={(v) => updateState({ materieleSchadeAnders: v })}
+            />
+          </div>
+        );
+      case "witnesses":
+        return (
+          <div className="px-4 py-4">
+            <Field label="Getuigen (namen, contact) — optioneel">
+              <textarea
+                className="min-h-[120px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                value={state.getuigen}
+                onChange={(e) => updateState({ getuigen: e.target.value })}
+              />
+            </Field>
+          </div>
+        );
+      case "situation_main":
+        return (
+          <div className="mx-3 mt-2 mb-4 flex flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.07)]">
+            {SITUATION_CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat.id];
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    const sub = cat.id;
+                    let nextStep: OngevalStepId = "sit_rear_end";
+                    if (sub === "rear_end") nextStep = "sit_rear_end";
+                    else if (sub === "opposite") nextStep = "sit_center_line";
+                    else if (sub === "priority") nextStep = "sit_priority";
+                    else if (sub === "maneuver") nextStep = "sit_maneuver_a";
+                    else if (sub === "lane_change") nextStep = "sit_lane_change";
+                    else if (sub === "parking") nextStep = "sit_parking";
+                    else if (sub === "door") nextStep = "sit_door";
+                    else if (sub === "load") nextStep = "sit_load";
+                    setState(
+                      advanceState(
+                        {
+                          ...state,
+                          situationCategory: cat.id,
+                          situationDetailKey: null,
+                          maneuverAKey: null,
+                          maneuverBKey: null,
+                        },
+                        nextStep,
+                      ),
+                    );
+                  }}
+                  className="flex w-full items-start gap-3 border-b border-black/[0.05] px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-[#F7F9FC]/80 active:bg-[#E8F4FB]/50"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10">
+                    <Icon className="size-6" strokeWidth={1.5} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-heading text-[15px] font-semibold text-[#163247]">
+                      {cat.title}
+                    </p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-[#5F7382]">
+                      {cat.description}
+                    </p>
+                  </div>
+                  <ChevronRight className="mt-1 size-5 shrink-0 text-[#2799D7]/35" />
+                </button>
+              );
+            })}
+          </div>
+        );
+      case "sit_rear_end":
+        return (
+          <OptionList
+            options={REAR_END_OPTIONS}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_center_line":
+        return (
+          <OptionList
+            options={CENTER_LINE_OPTIONS}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_priority":
+        return (
+          <OptionList
+            options={PRIORITY_OPTIONS}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_maneuver_a":
+        return (
+          <div>
+            <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
+              Kies de rijbeweging van partij A
+            </p>
+            <OptionList
+              options={MANEUVER_A_OPTIONS}
+              selectedId={state.maneuverAKey}
+              onSelect={(id) => updateState({ maneuverAKey: id })}
+            />
+          </div>
+        );
+      case "sit_maneuver_b":
+        return (
+          <div>
+            <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
+              Kies de rijbeweging van partij B
+            </p>
+            <OptionList
+              options={MANEUVER_B_OPTIONS}
+              selectedId={state.maneuverBKey}
+              onSelect={(id) => updateState({ maneuverBKey: id })}
+            />
+          </div>
+        );
+      case "sit_lane_change":
+        return (
+          <OptionList
+            options={LANE_CHANGE_OPTIONS}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_parking":
+        return (
+          <OptionList
+            options={GENERIC_SINGLE.parking ?? []}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_door":
+        return (
+          <OptionList
+            options={GENERIC_SINGLE.door ?? []}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "sit_load":
+        return (
+          <OptionList
+            options={GENERIC_SINGLE.load ?? []}
+            selectedId={state.situationDetailKey}
+            onSelect={(id) => updateState({ situationDetailKey: id })}
+          />
+        );
+      case "proposal_intro":
+        return (
+          <div className="px-4 py-8">
+            <div className="mx-auto max-w-md rounded-2xl border border-[#2799D7]/12 bg-gradient-to-br from-[#F7F9FC] to-white px-4 py-6 shadow-sm">
+              <p className="text-center text-[15px] leading-relaxed text-[#163247]">
+                Op basis van je antwoorden stellen we een voorstel van aangifte
+                op. Je kunt dit straks aanvaarden of verwerpen; bij verwerpen
+                vul je extra gegevens en een schets in.
+              </p>
+            </div>
+          </div>
+        );
+      case "proposal_decision":
+        return (
+          <div className="flex flex-col gap-4 px-4 py-10">
+            <p className="text-center text-[15px] text-[#163247]">
+              Aanvaard je dit voorstel van aangifte?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => updateState({ proposalAccepted: true })}
+                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
+                  state.proposalAccepted === true
+                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+                }`}
+              >
+                Ja
+              </button>
+              <button
+                type="button"
+                onClick={() => updateState({ proposalAccepted: false })}
+                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
+                  state.proposalAccepted === false
+                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+                }`}
+              >
+                Nee
+              </button>
+            </div>
+          </div>
+        );
+      case "circumstances_manual":
+        return (
+          <div className="px-4 py-4">
+            <Field label="Aanvullende omstandigheden en opmerkingen">
+              <textarea
+                className="min-h-[160px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                value={state.circumstancesNotes}
+                onChange={(e) =>
+                  updateState({ circumstancesNotes: e.target.value })
+                }
+              />
+            </Field>
+          </div>
+        );
+      case "vehicle_contact":
+        return (
+          <div className="flex flex-col gap-8 px-4 py-10">
+            <p className="text-center text-[16px] font-medium text-[#163247]">
+              Was er contact tussen de voertuigen?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => updateState({ vehicleContact: true })}
+                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
+                  state.vehicleContact === true
+                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+                }`}
+              >
+                Ja
+              </button>
+              <button
+                type="button"
+                onClick={() => updateState({ vehicleContact: false })}
+                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
+                  state.vehicleContact === false
+                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+                }`}
+              >
+                Nee
+              </button>
+            </div>
+          </div>
+        );
+      case "impact_party_a":
+        return (
+          <ImpactDiagram
+            label="Duid het raakpunt op voertuig A aan."
+            party="A"
+            value={state.impactPartyA}
+            onChange={(impactPartyA) => updateState({ impactPartyA })}
+          />
+        );
+      case "impact_party_b":
+        return (
+          <ImpactDiagram
+            label="Duid het raakpunt op voertuig B aan."
+            party="B"
+            value={state.impactPartyB}
+            onChange={(impactPartyB) => updateState({ impactPartyB })}
+          />
+        );
+      case "overview_intro":
+        return (
+          <div className="flex flex-col gap-6 px-4 py-10">
+            <p className="text-center text-[15px] leading-relaxed text-[#163247]">
+              Dit is de laatste stap bij het opmaken van de ongevalsaangifte.
+              Gelieve alle ingevoerde gegevens na te kijken. Je kunt dit ook
+              overslaan.
+            </p>
+          </div>
+        );
+      case "overview_detail":
+        return <OverviewTabs state={state} />;
+      case "signature_a_intro":
+        return (
+          <div className="px-4 py-16">
+            <p className="text-center text-[16px] text-[#163247]">
+              Handtekening op het volgende scherm
+            </p>
+          </div>
+        );
+      case "signature_a":
+        return (
+          <div className="flex min-h-[280px] flex-col px-4 py-4">
+            <SignaturePad
+              value={state.signaturePartyA}
+              onChange={(signaturePartyA) => updateState({ signaturePartyA })}
+            />
+          </div>
+        );
+      case "signature_b_intro":
+        return (
+          <div className="px-4 py-16">
+            <p className="text-center text-[16px] text-[#163247]">
+              Handtekening bestuurder B op het volgende scherm
+            </p>
+          </div>
+        );
+      case "signature_b":
+        return (
+          <div className="flex min-h-[280px] flex-col px-4 py-4">
+            <SignaturePad
+              value={state.signaturePartyB}
+              onChange={(signaturePartyB) => updateState({ signaturePartyB })}
+            />
+          </div>
+        );
+      case "complete":
+        return (
+          <div className="flex flex-col gap-4 px-4 py-12">
+            <p className="text-center text-[18px] font-semibold text-[#163247]">
+              Aangifte voltooid
+            </p>
+            <p className="text-center text-[14px] leading-relaxed text-[#5F7382]">
+              Download het ingevulde Europees aanrijdingsformulier en sluit
+              daarna af. Het dossier wordt als voltooid gemarkeerd in deze app.
+            </p>
+            <div className="mx-auto mt-2 w-full max-w-sm">
+              <Button
+                type="button"
+                className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white hover:bg-[#1e7bb0]"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/ongeval/${reportId}/pdf`, {
+                      method: "GET",
+                    });
+                    if (!res.ok) throw new Error("pdf");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `aanrijdingsformulier-${reportId}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    toast.error("PDF downloaden mislukt.");
+                  }
+                }}
+              >
+                Download PDF
+              </Button>
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  }
+
+  const footer = useMemo(() => {
+    if (stepId === "complete") {
+      return (
+        <WizardFooterButton
+          label="OK"
+          disabled={saving}
+          onClick={async () => {
+            try {
+              setSaving(true);
+              const { error } = await supabase
+                .from("ongeval_aangiften")
+                .update({
+                  status: "completed",
+                  payload: state as unknown as Record<string, unknown>,
+                })
+                .eq("id", reportId);
+              if (error) throw error;
+              if (onRequestClose) {
+                onRequestClose();
+              } else {
+                router.push(returnTo ?? "/chat");
+              }
+            } catch (e) {
+              console.error(e);
+              toast.error("Afronden mislukt.");
+            } finally {
+              setSaving(false);
+            }
+          }}
+        />
+      );
+    }
+    if (stepId === "overview_intro") {
+      return (
+        <div className="flex flex-col">
+          <button
+            type="button"
+            className="flex min-h-12 w-full items-center justify-center border-t border-black/[0.06] bg-[#F0F4F8] text-[15px] font-semibold text-[#163247] transition-colors hover:bg-[#E8EEF3]"
+            onClick={() => {
+              setState(
+                advanceState(
+                  { ...state, overviewSkipped: true },
+                  getNextAfterOverviewSkip(),
+                ),
+              );
+            }}
+          >
+            Sla het overzicht over
+          </button>
+          <WizardFooterButton label="Volgende" onClick={goNext} />
+        </div>
+      );
+    }
+    if (
+      stepId === "signature_a" ||
+      stepId === "signature_b" ||
+      stepId === "impact_party_a" ||
+      stepId === "impact_party_b"
+    ) {
+      return (
+        <div className="grid grid-cols-1">
+          <WizardFooterButton
+            label={stepId.startsWith("signature") ? "Bevestigen" : "Volgende"}
+            onClick={goNext}
+            disabled={!validateStep(stepId, state)}
+          />
+        </div>
+      );
+    }
+    if (
+      stepId === "situation_main" ||
+      stepId === "driver_select" ||
+      stepId === "policyholder_select" ||
+      stepId === "parties_count" ||
+      stepId === "devices_count" ||
+      stepId === "role_select" ||
+      stepId === "party_b_language" ||
+      stepId === "party_b_optional"
+    ) {
+      return null;
+    }
+    if (stepId === "share_qr" && state.role === "A") {
+      return (
+        <WizardFooterButton
+          label="Volgende"
+          onClick={goNext}
+          disabled={!partyBJoinedAt || saving}
+        />
+      );
+    }
+    return (
+      <WizardFooterButton
+        label="Volgende"
+        onClick={goNext}
+        disabled={!validateStep(stepId, state) || saving}
+      />
+    );
+  }, [
+    stepId,
+    goNext,
+    router,
+    state,
+    saving,
+    supabase,
+    reportId,
+    onRequestClose,
+    returnTo,
+    partyBJoinedAt,
+  ]);
+
+  return (
+    <>
+      <WizardShell
+        stepId={stepId}
+        embedded={embedded}
+        bannerMessage={bannerMessage}
+        bannerDismissed={bannerDismissed}
+        onDismissBanner={bannerMessage ? dismissBanner : undefined}
+        onBack={goBack}
+        showBack={stepId !== "driver_select"}
+        onExit={handleExit}
+        footer={footer}
+      >
+        <ScrollArea
+          className={
+            embedded
+              ? "min-h-0 flex-1"
+              : "h-[min(100dvh-120px,900px)]"
+          }
+        >
+          {renderBody()}
+        </ScrollArea>
+      </WizardShell>
+
+      <Dialog open={exitOpen} onOpenChange={setExitOpen}>
+        <DialogContent showCloseButton>
+          <DialogTitle>Wizard sluiten?</DialogTitle>
+          <DialogDescription>
+            {embedded
+              ? "Je concept is opgeslagen. Je kunt later verdergaan via het menu of opnieuw vanuit de chat."
+              : "Je concept is opgeslagen. Je kunt later verdergaan via het menu Ongeval melden."}
+          </DialogDescription>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setExitOpen(false)}>
+              Annuleren
+            </Button>
+            <Button onClick={confirmExit}>Sluiten</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12px] font-medium text-[#5F7382]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function YesNoBlock({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean | null;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-3 text-center text-[15px] font-medium text-[#163247]">
+        {label}
+      </p>
+      <div className="flex justify-center gap-4">
+        <button
+          type="button"
+          onClick={() => onChange(true)}
+          className={`min-h-[88px] min-w-[88px] rounded-full border-2 text-[16px] font-semibold ${
+            value === true
+              ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+              : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+          }`}
+        >
+          Ja
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className={`min-h-[88px] min-w-[88px] rounded-full border-2 text-[16px] font-semibold ${
+            value === false
+              ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+              : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
+          }`}
+        >
+          Nee
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModeCard({
+  icon: Icon,
+  title,
+  description,
+  comingSoon,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  title: string;
+  description: string;
+  comingSoon?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 text-left shadow-[0_2px_12px_rgba(39,153,215,0.06)] transition-all hover:border-[#2799D7]/25 hover:shadow-[0_4px_20px_rgba(39,153,215,0.1)] active:scale-[0.995]"
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10">
+        <Icon className="size-6" strokeWidth={1.75} />
+      </div>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-heading text-[15px] font-semibold leading-tight text-[#163247]">
+            {title}
+          </p>
+          {comingSoon ? (
+            <span className="inline-flex shrink-0 rounded-full border border-[#2799D7]/15 bg-[#E8F4FB]/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2389C4]">
+              Binnenkort
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1.5 text-[13px] leading-snug text-[#5F7382]">
+          {description}
+        </p>
+      </div>
+      <ChevronRight className="mt-1 size-5 shrink-0 text-[#2799D7]/35 transition group-hover:translate-x-0.5 group-hover:text-[#2799D7]/55" />
+    </button>
+  );
+}
+
+function OptionList({
+  options,
+  selectedId,
+  onSelect,
+}: {
+  options: { id: string; title: string; description: string }[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+      {options.map((o) => {
+        const selected = selectedId === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => onSelect(o.id)}
+            className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-4 text-left transition-all active:scale-[0.995] ${
+              selected
+                ? "border-[#2799D7]/35 bg-[#E8F4FB]/90 shadow-[0_4px_20px_rgba(39,153,215,0.12)] ring-2 ring-[#2799D7]/20"
+                : "border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.06)] hover:border-[#2799D7]/25 hover:shadow-[0_4px_20px_rgba(39,153,215,0.1)]"
+            }`}
+          >
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="font-heading text-[15px] font-semibold leading-tight text-[#163247]">
+                {o.title}
+              </p>
+              {o.description ? (
+                <p className="mt-1.5 text-[13px] leading-snug text-[#5F7382]">
+                  {o.description}
+                </p>
+              ) : null}
+            </div>
+            <ChevronRight
+              className={`mt-1 size-5 shrink-0 transition group-hover:translate-x-0.5 ${
+                selected
+                  ? "text-[#2799D7]"
+                  : "text-[#2799D7]/35 group-hover:text-[#2799D7]/55"
+              }`}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function OverviewTabs({ state }: { state: AccidentReportState }) {
+  const [tab, setTab] = useState<
+    "locatie" | "vragen" | "getuigen" | "gegevens"
+  >("locatie");
+  const loc = state.location;
+  return (
+    <div className="flex min-h-[320px] flex-col">
+      <div className="flex border-b border-black/[0.08] bg-white px-2">
+        {(
+          [
+            ["locatie", "Locatie"],
+            ["vragen", "Vragen"],
+            ["getuigen", "Getuigen"],
+            ["gegevens", "Gegevens"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`min-h-11 flex-1 border-b-2 px-1 py-2 text-[13px] font-medium ${
+              tab === id
+                ? "border-[#2799D7] text-[#2799D7]"
+                : "border-transparent text-[#5F7382]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 space-y-4 px-4 py-4">
+        {tab === "locatie" ? (
+          <>
+            <Section title="Plaats van het ongeval">
+              <Row label="Straat" value={loc.straat} />
+              <Row label="Huisnummer" value={loc.huisnummer} />
+              <Row label="Postcode" value={loc.postcode} />
+              <Row label="Stad" value={loc.stad} />
+              <Row label="Land" value={loc.land} />
+            </Section>
+            <Section title="Tijdstip">
+              <Row label="Datum" value={loc.datum} />
+              <Row label="Uur" value={loc.tijd} />
+            </Section>
+          </>
+        ) : null}
+        {tab === "vragen" ? (
+          <Section title="Samenvatting">
+            <Row
+              label="Ongevalstype"
+              value={state.situationCategory ?? "—"}
+            />
+            <Row label="Detail" value={state.situationDetailKey ?? "—"} />
+            <Row
+              label="Voorstel aanvaard"
+              value={
+                state.proposalAccepted === null
+                  ? "—"
+                  : state.proposalAccepted
+                    ? "Ja"
+                    : "Nee"
+              }
+            />
+            <Row
+              label="Contact tussen voertuigen"
+              value={
+                state.vehicleContact === null
+                  ? "—"
+                  : state.vehicleContact
+                    ? "Ja"
+                    : "Nee"
+              }
+            />
+          </Section>
+        ) : null}
+        {tab === "getuigen" ? (
+          <Section title="Getuigen">
+            <p className="whitespace-pre-wrap text-[14px] text-[#163247]">
+              {state.getuigen || "—"}
+            </p>
+          </Section>
+        ) : null}
+        {tab === "gegevens" ? (
+          <>
+            <Section title="Voertuig A">
+              <Row
+                label="Nummerplaat"
+                value={state.partyA.voertuig.nummerplaat}
+              />
+              <Row
+                label="Bestuurder"
+                value={[state.partyA.bestuurder.voornaam, state.partyA.bestuurder.naam]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+            </Section>
+            <Section title="Voertuig B">
+              <Row
+                label="Nummerplaat"
+                value={state.partyB.voertuig.nummerplaat}
+              />
+              <Row
+                label="Bestuurder"
+                value={[state.partyB.bestuurder.voornaam, state.partyB.bestuurder.naam]
+                  .filter(Boolean)
+                  .join(" ")}
+              />
+            </Section>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-2 rounded-lg border border-[#2799D7]/10 bg-[#E8F4FB]/60 px-3 py-1.5 text-[13px] font-semibold text-[#163247]">
+        {title}
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[12px] text-[#5F7382]">{label}</p>
+      <p className="text-[15px] font-semibold text-[#163247]">{value || "—"}</p>
+    </div>
+  );
+}

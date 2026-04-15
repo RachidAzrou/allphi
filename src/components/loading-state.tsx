@@ -3,14 +3,29 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { FaCarRear } from "react-icons/fa6";
 
+type LoadingStateContext = "chat" | "documenten" | "ongeval";
+
 interface LoadingStateProps {
+  /** @deprecated Use `subtitle` instead. */
   message?: string;
+  subtitle?: string;
+  context?: LoadingStateContext;
 }
 
 export function LoadingState({
-  message = "We halen je laatste berichten op…",
+  message,
+  subtitle,
+  context = "chat",
 }: LoadingStateProps) {
   const reduceMotion = useReducedMotion();
+  const resolvedSubtitle =
+    subtitle ??
+    message ??
+    (context === "documenten"
+      ? "We halen je documenten op…"
+      : context === "ongeval"
+        ? "We halen je dossiergegevens op…"
+        : "We halen je laatste berichten op…");
 
   return (
     <div
@@ -61,7 +76,7 @@ export function LoadingState({
         </div>
 
         <p className="w-full text-center text-base font-medium leading-snug text-[#163247]/90 sm:text-lg">
-          {message}
+          {resolvedSubtitle}
         </p>
       </div>
     </div>

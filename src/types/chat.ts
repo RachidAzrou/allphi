@@ -10,6 +10,7 @@ export type ChatIntent =
   | "charging_summary"
   | "charging_home_vs_public"
   | "reimbursement_status"
+  | "accident_report"
   | "greeting"
   // Manager intents (stubs)
   | "fleet_overview"
@@ -48,12 +49,19 @@ export interface ResponseCard {
 // ──────────────────────────────────────────────
 // Chat response (API shape)
 // ──────────────────────────────────────────────
+/** Optionele knop naar een interne app-route (bijv. ongeval-wizard). */
+export interface ChatResponseCta {
+  label: string;
+  href: string;
+}
+
 export interface ChatResponse {
   intent: ChatIntent;
   title: string;
   message: string;
   cards?: ResponseCard[];
   suggestions?: string[];
+  cta?: ChatResponseCta;
 }
 
 // ──────────────────────────────────────────────
@@ -87,6 +95,7 @@ export interface ChatMessage {
   title?: string;
   cards?: ResponseCard[];
   suggestions?: string[];
+  cta?: ChatResponseCta;
   /** User-uploaded files (names shown in the bubble; upload happens on send) */
   attachments?: ChatAttachment[];
 }

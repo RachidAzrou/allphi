@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Bot as LuBot, Paperclip } from "lucide-react";
 import type { ChatAttachment, ChatMessage } from "@/types/chat";
@@ -18,11 +19,14 @@ const ASSISTANT_AVATAR_ICON = "h-[22px] w-[22px] text-[#1E7AB0]" as const;
 interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
+  /** Opent de ongeval-wizard (full-page) vanaf de chat */
+  onOpenAccidentWizard?: () => void;
 }
 
 export function ChatMessageList({
   messages,
   isLoading,
+  onOpenAccidentWizard,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +52,10 @@ export function ChatMessageList({
               timestamp={msg.timestamp}
             />
           ) : (
-            <AssistantBubble message={msg} />
+            <AssistantBubble
+              message={msg}
+              onOpenAccidentWizard={onOpenAccidentWizard}
+            />
           )}
         </motion.div>
       ))}
@@ -188,8 +195,16 @@ function UserBubble({
   );
 }
 
-function AssistantBubble({ message }: { message: ChatMessage }) {
+function AssistantBubble({
+  message,
+  onOpenAccidentWizard,
+}: {
+  message: ChatMessage;
+  onOpenAccidentWizard?: () => void;
+}) {
   const hasCards = (message.cards?.length ?? 0) > 0;
+  const cta = message.cta;
+  const openWizardFromChat = Boolean(onOpenAccidentWizard && cta?.href === "/ongeval");
 
   return (
     <div className="flex w-full min-w-0 flex-col justify-start gap-2">
@@ -204,6 +219,26 @@ function AssistantBubble({ message }: { message: ChatMessage }) {
                 __html: formatMarkdown(message.content),
               }}
             />
+            {cta ? (
+              <div className="mt-3">
+                {openWizardFromChat ? (
+                  <button
+                    type="button"
+                    onClick={onOpenAccidentWizard}
+                    className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-xl bg-[#2799D7] px-4 py-2.5 text-center text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e7bb0] active:bg-[#1a6a9a]"
+                  >
+                    {cta.label}
+                  </button>
+                ) : (
+                  <Link
+                    href={cta.href}
+                    className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-xl bg-[#2799D7] px-4 py-2.5 text-center text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e7bb0] active:bg-[#1a6a9a]"
+                  >
+                    {cta.label}
+                  </Link>
+                )}
+              </div>
+            ) : null}
             <time
               dateTime={message.timestamp.toISOString()}
               className="mt-2 block text-right text-[11px] leading-none tabular-nums text-[#5F7382]/90"

@@ -1,8 +1,11 @@
 "use client";
 
-import { CircleUser, Lock, LogOut, Menu } from "lucide-react";
+import { CircleUser, LogOut, Menu } from "lucide-react";
+import { FaCarCrash } from "react-icons/fa";
+import { HiOutlineChatAlt2 } from "react-icons/hi";
+import { PiFolderUserBold } from "react-icons/pi";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -10,6 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useState } from "react";
 
 interface AppHeaderProps {
   userEmail?: string;
@@ -19,10 +23,23 @@ interface AppHeaderProps {
 
 export function AppHeader({ userEmail, userDisplayName }: AppHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const navIconWrap =
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]";
+  const navIcon =
+    "size-[22px] transition-transform group-hover/button:scale-[1.04]";
+
+  const navigateFromSheet = (href: string) => {
+    setSheetOpen(false);
+    if (pathname !== href) router.push(href);
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setSheetOpen(false);
     router.push("/login");
   };
 
@@ -49,7 +66,7 @@ export function AppHeader({ userEmail, userDisplayName }: AppHeaderProps) {
         </div>
 
         <div className="flex w-11 shrink-0 justify-center">
-          <Sheet>
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger
               type="button"
               className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full text-[#3C3C43] transition-colors hover:bg-black/[0.05] active:bg-black/[0.08]"
@@ -65,7 +82,11 @@ export function AppHeader({ userEmail, userDisplayName }: AppHeaderProps) {
                 <SheetTitle className="mb-4 font-heading text-sm font-semibold text-[#2799D7]">
                   Account
                 </SheetTitle>
-                <div className="flex items-start gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigateFromSheet("/profiel")}
+                  className="flex w-full items-start gap-3 rounded-2xl text-left transition-colors hover:bg-[#F7F9FC] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#2799D7]/20"
+                >
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]"
                     aria-hidden={true}
@@ -82,28 +103,48 @@ export function AppHeader({ userEmail, userDisplayName }: AppHeaderProps) {
                       </p>
                     ) : null}
                   </div>
-                </div>
+                </button>
               </div>
               <div className="flex flex-col gap-3 border-t border-[#2799D7]/10 bg-[#F7F9FC] p-3">
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-10 w-full justify-start gap-3 rounded-lg px-3 text-[14px] font-medium text-[#163247] hover:bg-[#E8F4FB]"
-                  onClick={() => router.push("/set-password?wijzigen=1")}
+                  className="h-14 w-full justify-start gap-3 rounded-2xl px-4 text-[15px] font-semibold text-[#163247] hover:bg-[#E8F4FB]"
+                  onClick={() => navigateFromSheet("/chat")}
                 >
-                  <Lock className="size-4 shrink-0 text-[#2799D7]" strokeWidth={1.75} />
-                  Wachtwoord wijzigen
+                  <span className={navIconWrap} aria-hidden>
+                    <HiOutlineChatAlt2 className={navIcon} aria-hidden />
+                  </span>
+                  Chat
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  className="h-10 w-full gap-2 rounded-lg border-[#2799D7]/30 bg-white text-[14px] font-medium text-[#163247] hover:border-red-200 hover:bg-red-50 hover:text-red-950 hover:[&_svg]:text-red-600"
+                  variant="ghost"
+                  className="h-14 w-full justify-start gap-3 rounded-2xl px-4 text-[15px] font-semibold text-[#163247] hover:bg-[#E8F4FB]"
+                  onClick={() => navigateFromSheet("/ongeval")}
+                >
+                  <span className={navIconWrap} aria-hidden>
+                    <FaCarCrash className={navIcon} aria-hidden />
+                  </span>
+                  Mijn incidenten
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-14 w-full justify-start gap-3 rounded-2xl px-4 text-[15px] font-semibold text-[#163247] hover:bg-[#E8F4FB]"
+                  onClick={() => navigateFromSheet("/documenten")}
+                >
+                  <span className={navIconWrap} aria-hidden>
+                    <PiFolderUserBold className={navIcon} aria-hidden />
+                  </span>
+                  Mijn documenten
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="h-14 w-full gap-3 rounded-2xl px-4 text-[15px] font-semibold"
                   onClick={handleLogout}
                 >
-                  <LogOut
-                    className="size-4 text-[#2799D7] transition-colors"
-                    strokeWidth={1.75}
-                  />
                   Uitloggen
                 </Button>
               </div>

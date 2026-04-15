@@ -30,6 +30,8 @@ export interface FleetAssistantContext {
   goedkeuringsstatus?: string;
   document_type?: string;
   document_url?: string;
+  insurance_company?: string;
+  policy_number?: string;
 }
 
 // ──────────────────────────────────────────────

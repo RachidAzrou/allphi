@@ -10,6 +10,7 @@ import { ChatMessageList } from "@/components/chat-message-list";
 import { ChatComposer } from "@/components/chat-composer";
 import { LoadingState } from "@/components/loading-state";
 import type { ChatMessage, ChatPostResponse } from "@/types/chat";
+import { createInitialAccidentState } from "@/types/ongeval";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -21,6 +22,52 @@ export default function ChatPage() {
 
   const router = useRouter();
   const supabase = createClient();
+
+  const openAccidentWizard = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.id) {
+        toast.error("Je moet ingelogd zijn.");
+        return;
+      }
+      const { data: draft } = await supabase
+        .from("ongeval_aangiften")
+        .select("id, payload")
+        .eq("user_id", user.id)
+        .eq("status", "draft")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (draft?.id) {
+        router.push(`/ongeval/${draft.id}?returnTo=/chat`);
+        return;
+      }
+
+      const payload = createInitialAccidentState();
+      const { data: row, error } = await supabase
+        .from("ongeval_aangiften")
+        .insert({
+          user_id: user.id,
+          status: "draft",
+          payload: payload as unknown as Record<string, unknown>,
+        })
+        .select("id")
+        .single();
+
+      if (error || !row?.id) {
+        console.error(error);
+        toast.error("Kon de wizard niet openen. Probeer via het menu Ongeval melden.");
+        return;
+      }
+      router.push(`/ongeval/${row.id}?returnTo=/chat`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Kon de wizard niet openen.");
+    }
+  }, [supabase]);
 
   const loadMessages = useCallback(async () => {
     const res = await fetch("/api/chat/messages", { credentials: "same-origin" });
@@ -198,7 +245,11 @@ export default function ChatPage() {
                 <WelcomeCard voornaam={voornaam} onAction={sendMessage} />
               )}
 
-              <ChatMessageList messages={messages} isLoading={isLoading} />
+              <ChatMessageList
+                messages={messages}
+                isLoading={isLoading}
+                onOpenAccidentWizard={openAccidentWizard}
+              />
             </div>
 
             <ChatComposer onSend={sendMessage} disabled={isLoading} />

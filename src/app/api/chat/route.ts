@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { detectIntent } from "@/lib/intent/router";
+import { detectAccidentFallback, detectIntent } from "@/lib/intent/router";
 import { handleIntent } from "@/lib/intent/handlers";
 import { generateOpenAIReply } from "@/lib/openai/fleet-chat";
 import type { ChatResponse } from "@/types/chat";
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
-      let message = String(form.get("message") ?? "").trim();
+      const message = String(form.get("message") ?? "").trim();
       const rawFiles = form.getAll("files");
       const files = rawFiles.filter(
         (x): x is File => x instanceof File && x.size > 0
@@ -131,7 +131,10 @@ export async function POST(request: NextRequest) {
 
     // Intent alleen op wat de gebruiker typte — niet op [Bijlagen] / .pdf in URLs,
     // anders wordt "my_documents" getriggerd bij elke PDF-bijlage.
-    const intent = detectIntent(userFacingContent);
+    let intent = detectIntent(userFacingContent);
+    if (intent === "unknown" && detectAccidentFallback(userFacingContent)) {
+      intent = "accident_report";
+    }
 
     const result: ChatResponse =
       intent === "unknown" && process.env.OPENAI_API_KEY

@@ -11,6 +11,33 @@ interface IntentRule {
  * then keyword fallback. Order matters: more specific intents come first.
  */
 const rules: IntentRule[] = [
+  // ── Traffic accident / European accident statement (before generic "schade" etc.) ──
+  {
+    intent: "accident_report",
+    patterns: [
+      /\b(heb|had|ben|was|kreeg|krijg).{0,60}\b(ongeval|aanrijding|botsing)\b/i,
+      /\b(ongeval|aanrijding|botsing).{0,40}\b(gehad|gekregen|meegemaakt|melden)\b/i,
+      /\b(meld|invul|invullen).{0,40}(aanrijdingsformulier|ongeval)/i,
+      /aanrijding/i,
+      /aangereden/i,
+      /aangebotst/i,
+      /botsing/i,
+      /verkeersongeval/i,
+      /europees\s+aanrijdingsformulier/i,
+      /aanrijdingsformulier/i,
+      /(ik\s+)?(heb|had|ben|was).*(ongeval|aanrijding|botsing)/i,
+      /(na|door)\s+(een\s+)?(botsing|aanrijding|ongeval)/i,
+    ],
+    keywords: [
+      "ongeval gehad",
+      "aanrijding gehad",
+      "botsing gehad",
+      "ik had een ongeval",
+      "schade na ongeval",
+      "europees aanrijdingsformulier",
+    ],
+  },
+
   // ── Charging: home vs public (must come before charging_summary) ──
   {
     intent: "charging_home_vs_public",
@@ -145,6 +172,14 @@ const rules: IntentRule[] = [
   },
 ];
 
+/** "Geen ongeval" / "niet … ongeval" mag niet als melding worden gezien. */
+function shouldRejectAccidentIntent(normalized: string): boolean {
+  if (/\bgeen ongeval\b/.test(normalized)) return true;
+  if (/\b(niet|nooit)\s+(een\s+)?(aanrijding|botsing|ongeval)\b/.test(normalized))
+    return true;
+  return false;
+}
+
 export function detectIntent(message: string): ChatIntent {
   const normalized = message.toLowerCase().trim();
 
@@ -152,6 +187,12 @@ export function detectIntent(message: string): ChatIntent {
   for (const rule of rules) {
     for (const pattern of rule.patterns) {
       if (pattern.test(normalized)) {
+        if (
+          rule.intent === "accident_report" &&
+          shouldRejectAccidentIntent(normalized)
+        ) {
+          continue;
+        }
         return rule.intent;
       }
     }
@@ -161,10 +202,29 @@ export function detectIntent(message: string): ChatIntent {
   for (const rule of rules) {
     for (const kw of rule.keywords) {
       if (normalized.includes(kw)) {
+        if (
+          rule.intent === "accident_report" &&
+          shouldRejectAccidentIntent(normalized)
+        ) {
+          continue;
+        }
         return rule.intent;
       }
     }
   }
 
   return "unknown";
+}
+
+/**
+ * Fallback wanneer geen regel matcht maar de tekst duidelijk over een
+ * verkeersongeval gaat (brede match vóór OpenAI).
+ */
+export function detectAccidentFallback(message: string): boolean {
+  const t = message.toLowerCase().trim();
+  if (shouldRejectAccidentIntent(t)) return false;
+  if (/(no\s+accident)/i.test(message)) return false;
+  return /(ongeval|aanrijding|botsing|aanrijd|aangereden|aangebotst|verkeersongeval|crash|collision|aanrijdingsformulier)/i.test(
+    t,
+  );
 }

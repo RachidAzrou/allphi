@@ -1,0 +1,609 @@
+import type {
+  AccidentReportState,
+  OngevalStepId,
+} from "@/types/ongeval";
+import { createInitialAccidentState } from "@/types/ongeval";
+
+const PHASE_ORDER: OngevalStepId[][] = [
+  [
+    "driver_select",
+    "driver_employee_form",
+    "driver_other_form",
+    "policyholder_select",
+    "policyholder_form",
+    "insurer_select",
+    "vehicle_confirm",
+  ],
+  [
+    "parties_count",
+    "devices_count",
+    "role_select",
+    "share_qr",
+    "scan_qr",
+    "party_b_language",
+    "party_b_optional",
+    "party_b_form",
+  ],
+  ["location_time", "injuries_material", "witnesses"],
+  [
+    "situation_main",
+    "sit_rear_end",
+    "sit_center_line",
+    "sit_priority",
+    "sit_maneuver_a",
+    "sit_maneuver_b",
+    "sit_lane_change",
+    "sit_parking",
+    "sit_door",
+    "sit_load",
+  ],
+  ["proposal_intro", "proposal_decision", "circumstances_manual"],
+  ["vehicle_contact", "impact_party_a", "impact_party_b"],
+  ["overview_intro", "overview_detail"],
+  [
+    "signature_a_intro",
+    "signature_a",
+    "signature_b_intro",
+    "signature_b",
+    "complete",
+  ],
+];
+
+export function getProgressForStep(stepId: OngevalStepId): {
+  step: number;
+  total: number;
+  fraction: number;
+} {
+  const total = PHASE_ORDER.length;
+  let phaseIndex = 0;
+  for (let i = 0; i < PHASE_ORDER.length; i++) {
+    if (PHASE_ORDER[i].includes(stepId)) {
+      phaseIndex = i;
+      break;
+    }
+  }
+  const fraction = (phaseIndex + 1) / total;
+  return { step: phaseIndex + 1, total, fraction };
+}
+
+function afterDriverSelect(state: AccidentReportState): OngevalStepId {
+  if (state.driverWasEmployee === false) return "driver_other_form";
+  return "driver_employee_form";
+}
+
+function afterPolicyholderSelect(state: AccidentReportState): OngevalStepId {
+  // Always allow reviewing/editing policyholder fields; company/other need manual.
+  return "policyholder_form";
+}
+
+function afterDevicesCount(state: AccidentReportState): OngevalStepId {
+  if (state.devicesCount === 2) return "role_select";
+  return "party_b_language";
+}
+
+function afterRoleSelect(state: AccidentReportState): OngevalStepId {
+  if (state.role === "A") return "share_qr";
+  if (state.role === "B") return "scan_qr";
+  return "role_select";
+}
+
+function afterPartyBOptional(state: AccidentReportState): OngevalStepId {
+  // If only one party is present and user doesn't want to enter B details,
+  // skip B-related inputs and start accident questions.
+  if (state.partiesCount === 1 && state.wantsFillPartyB === true) {
+    return "party_b_form";
+  }
+  return "location_time";
+}
+
+function situationSubStep(
+  state: AccidentReportState,
+): OngevalStepId | null {
+  const c = state.situationCategory;
+  if (!c) return null;
+  switch (c) {
+    case "rear_end":
+      return "sit_rear_end";
+    case "opposite":
+      return "sit_center_line";
+    case "priority":
+      return "sit_priority";
+    case "maneuver":
+      return "sit_maneuver_a";
+    case "lane_change":
+      return "sit_lane_change";
+    case "parking":
+      return "sit_parking";
+    case "door":
+      return "sit_door";
+    case "load":
+      return "sit_load";
+    default:
+      return "situation_main";
+  }
+}
+
+function afterSituationSub(state: AccidentReportState): OngevalStepId {
+  if (state.situationCategory === "maneuver") {
+    if (state.currentStepId === "sit_maneuver_a") return "sit_maneuver_b";
+  }
+  return "proposal_intro";
+}
+
+export function getNextStepId(
+  from: OngevalStepId,
+  state: AccidentReportState,
+): OngevalStepId | null {
+  switch (from) {
+    case "driver_select":
+      return afterDriverSelect(state);
+    case "driver_employee_form":
+      return "policyholder_form";
+    case "driver_other_form":
+      return "policyholder_form";
+    case "policyholder_select":
+      return afterPolicyholderSelect(state);
+    case "policyholder_form":
+      return "insurer_select";
+    case "insurer_select":
+      return "vehicle_confirm";
+    case "vehicle_confirm":
+      return "parties_count";
+    case "parties_count":
+      return "devices_count";
+    case "devices_count":
+      return afterDevicesCount(state);
+    case "role_select":
+      return afterRoleSelect(state);
+    case "share_qr":
+      return "location_time";
+    case "scan_qr":
+      return "location_time";
+    case "party_b_language":
+      return "party_b_optional";
+    case "party_b_optional":
+      return afterPartyBOptional(state);
+    case "party_b_form":
+      return "location_time";
+    case "location_time":
+      return "injuries_material";
+    case "injuries_material":
+      return "witnesses";
+    case "witnesses":
+      return "situation_main";
+    case "situation_main": {
+      const sub = situationSubStep(state);
+      return sub ?? "situation_main";
+    }
+    case "sit_rear_end":
+    case "sit_center_line":
+    case "sit_priority":
+    case "sit_lane_change":
+    case "sit_parking":
+    case "sit_door":
+    case "sit_load":
+      return "proposal_intro";
+    case "sit_maneuver_a":
+      return afterSituationSub(state);
+    case "sit_maneuver_b":
+      return "proposal_intro";
+    case "proposal_intro":
+      return "proposal_decision";
+    case "proposal_decision":
+      if (state.proposalAccepted === false) return "circumstances_manual";
+      return "vehicle_contact";
+    case "circumstances_manual":
+      return "vehicle_contact";
+    case "vehicle_contact":
+      if (state.vehicleContact === true) return "impact_party_a";
+      return "overview_intro";
+    case "impact_party_a":
+      return "impact_party_b";
+    case "impact_party_b":
+      return "overview_intro";
+    case "overview_intro":
+      return "overview_detail";
+    case "overview_detail":
+      return "signature_a_intro";
+    case "signature_a_intro":
+      return "signature_a";
+    case "signature_a":
+      return "signature_b_intro";
+    case "signature_b_intro":
+      return "signature_b";
+    case "signature_b":
+      return "complete";
+    case "complete":
+      return null;
+    default:
+      return null;
+  }
+}
+
+/** Skip overview detail (user already saw intro) — goes to first signature step. */
+export function getNextAfterOverviewSkip(): OngevalStepId {
+  return "signature_a_intro";
+}
+
+export function getPreviousStepId(state: AccidentReportState): OngevalStepId | null {
+  const n = state.navigationHistory.length;
+  if (n === 0) return null;
+  return state.navigationHistory[n - 1] ?? null;
+}
+
+/** Move forward: push current step on history, set new current. */
+export function advanceState(
+  state: AccidentReportState,
+  nextId: OngevalStepId,
+): AccidentReportState {
+  return {
+    ...state,
+    navigationHistory: [...state.navigationHistory, state.currentStepId],
+    currentStepId: nextId,
+  };
+}
+
+export function popHistory(state: AccidentReportState): AccidentReportState {
+  if (state.navigationHistory.length === 0) return state;
+  const previousId =
+    state.navigationHistory[state.navigationHistory.length - 1];
+  return {
+    ...state,
+    navigationHistory: state.navigationHistory.slice(0, -1),
+    currentStepId: previousId,
+  };
+}
+
+export function validateStep(
+  stepId: OngevalStepId,
+  state: AccidentReportState,
+): boolean {
+  const loc = state.location;
+  switch (stepId) {
+    case "driver_select":
+      return state.driverWasEmployee !== null;
+    case "driver_other_form":
+      return (
+        state.otherDriver.naam.trim().length > 0 &&
+        state.otherDriver.voornaam.trim().length > 0 &&
+        state.otherDriver.geboortedatum.trim().length > 0 &&
+        state.otherDriver.adres.straat.trim().length > 0 &&
+        state.otherDriver.adres.huisnummer.trim().length > 0 &&
+        state.otherDriver.adres.postcode.trim().length > 0 &&
+        state.otherDriver.adres.stad.trim().length > 0 &&
+        state.otherDriver.adres.land.trim().length > 0
+      );
+    case "driver_employee_form":
+      return (
+        state.employeeDriver.naam.trim().length > 0 &&
+        state.employeeDriver.voornaam.trim().length > 0 &&
+        state.employeeDriver.geboortedatum.trim().length > 0 &&
+        state.employeeDriver.adres.straat.trim().length > 0 &&
+        state.employeeDriver.adres.huisnummer.trim().length > 0 &&
+        state.employeeDriver.adres.postcode.trim().length > 0 &&
+        state.employeeDriver.adres.stad.trim().length > 0 &&
+        state.employeeDriver.adres.land.trim().length > 0
+      );
+    case "policyholder_select":
+      return Boolean(state.partyA.verzekeringsnemerType);
+    case "policyholder_form":
+      return (
+        state.partyA.verzekeringsnemer.naam.trim().length > 0 &&
+        state.partyA.verzekeringsnemer.adres.straat.trim().length > 0 &&
+        state.partyA.verzekeringsnemer.adres.huisnummer.trim().length > 0 &&
+        state.partyA.verzekeringsnemer.adres.postcode.trim().length > 0 &&
+        state.partyA.verzekeringsnemer.adres.stad.trim().length > 0 &&
+        state.partyA.verzekeringsnemer.adres.land.trim().length > 0
+      );
+    case "insurer_select":
+      return (
+        state.partyA.verzekering.maatschappij.trim().length > 0 &&
+        state.partyA.verzekering.polisnummer.trim().length > 0
+      );
+    case "vehicle_confirm":
+      return (
+        state.partyA.voertuig.merkModel.trim().length > 0 &&
+        state.partyA.voertuig.nummerplaat.trim().length > 0 &&
+        state.partyA.voertuig.landInschrijving.trim().length > 0
+      );
+    case "parties_count":
+      return state.partiesCount !== null;
+    case "devices_count":
+      return state.devicesCount !== null;
+    case "role_select":
+      return state.devicesCount !== 2 || state.role !== null;
+    case "share_qr":
+      return true;
+    case "scan_qr":
+      return true;
+    case "party_b_language":
+      return state.partyBLanguage !== null;
+    case "party_b_optional":
+      return state.partiesCount !== 1 || state.wantsFillPartyB !== null;
+    case "party_b_form":
+      return (
+        state.partyB.verzekeringsnemer.naam.trim().length > 0 &&
+        state.partyB.verzekeringsnemer.voornaam.trim().length > 0 &&
+        state.partyB.verzekering.maatschappij.trim().length > 0 &&
+        state.partyB.verzekering.polisnummer.trim().length > 0 &&
+        state.partyB.voertuig.merkModel.trim().length > 0 &&
+        state.partyB.voertuig.nummerplaat.trim().length > 0
+      );
+    case "location_time":
+      return (
+        loc.straat.trim().length > 0 &&
+        loc.huisnummer.trim().length > 0 &&
+        loc.postcode.trim().length > 0 &&
+        loc.stad.trim().length > 0 &&
+        loc.land.trim().length > 0 &&
+        loc.datum.trim().length > 0 &&
+        loc.tijd.trim().length > 0
+      );
+    case "injuries_material":
+      return state.gewonden !== null && state.materieleSchadeAnders !== null;
+    case "witnesses":
+      return true;
+    case "situation_main":
+      return state.situationCategory !== null;
+    case "sit_rear_end":
+    case "sit_center_line":
+    case "sit_priority":
+    case "sit_lane_change":
+    case "sit_parking":
+    case "sit_door":
+    case "sit_load":
+      return state.situationDetailKey !== null;
+    case "sit_maneuver_a":
+      return state.maneuverAKey !== null;
+    case "sit_maneuver_b":
+      return state.maneuverBKey !== null;
+    case "proposal_intro":
+      return true;
+    case "proposal_decision":
+      return state.proposalAccepted !== null;
+    case "circumstances_manual":
+      return true;
+    case "vehicle_contact":
+      return state.vehicleContact !== null;
+    case "impact_party_a":
+      return state.vehicleContact === false || state.impactPartyA !== null;
+    case "impact_party_b":
+      return state.vehicleContact === false || state.impactPartyB !== null;
+    case "overview_intro":
+      return true;
+    case "overview_detail":
+      return true;
+    case "signature_a_intro":
+      return true;
+    case "signature_a":
+      return state.signaturePartyA !== null;
+    case "signature_b_intro":
+      return true;
+    case "signature_b":
+      return state.signaturePartyB !== null;
+    case "complete":
+      return true;
+    default:
+      return true;
+  }
+}
+
+export function getStepTitle(stepId: OngevalStepId): string {
+  const titles: Record<OngevalStepId, string> = {
+    driver_select: "Bestuurder",
+    driver_employee_form: "Bestuurder",
+    driver_other_form: "Bestuurder",
+    policyholder_select: "Verzekeringsnemer",
+    policyholder_form: "Verzekeringsnemer",
+    insurer_select: "Verzekering",
+    vehicle_confirm: "Voertuig",
+    parties_count: "Aantal partijen",
+    devices_count: "Aantal toestellen",
+    role_select: "Kies je rol",
+    share_qr: "Deel QR-code",
+    scan_qr: "Scan QR-code",
+    party_b_language: "Taal partij B",
+    party_b_optional: "Partij B",
+    party_b_form: "Gegevens partij B",
+    location_time: "Plaats en tijd",
+    injuries_material: "Gewonden en schade",
+    witnesses: "Getuigen",
+    situation_main: "Ongevalsituaties",
+    sit_rear_end: "Aanrijding achteraan",
+    sit_center_line: "Een voertuig overschrijdt de middenlijn",
+    sit_priority: "Een partij heeft een voorrangsteken niet nageleefd",
+    sit_maneuver_a: "Manoeuvre partij A",
+    sit_maneuver_b: "Manoeuvre partij B",
+    sit_lane_change: "Verandering van file",
+    sit_parking: "Parkeerstand",
+    sit_door: "Openen portier",
+    sit_load: "Verlies van lading",
+    proposal_intro: "Voorstel van aangifte",
+    proposal_decision: "Voorstel van aangifte",
+    circumstances_manual: "Toedracht (aanvulling)",
+    vehicle_contact: "Raakpunt aan de voertuigen",
+    impact_party_a: "Raakpunt voertuig A",
+    impact_party_b: "Raakpunt voertuig B",
+    overview_intro: "Overzicht ongevalsaangifte",
+    overview_detail: "Overzicht",
+    signature_a_intro: "Handtekening A",
+    signature_a: "Handtekening A",
+    signature_b_intro: "Handtekening B",
+    signature_b: "Handtekening B",
+    complete: "Voltooiing",
+  };
+  return titles[stepId];
+}
+
+export function mergePayloadIntoState(
+  raw: unknown,
+): AccidentReportState {
+  const base = createInitialAccidentState();
+  if (!raw || typeof raw !== "object") return base;
+  const o = raw as Record<string, unknown>;
+
+  // v1 → v2 migration (best-effort)
+  const maybeV1Party = (p: unknown) =>
+    p &&
+    typeof p === "object" &&
+    ("verzekeringsnemerNaam" in (p as object) ||
+      "bestuurderNaam" in (p as object));
+
+  const migratePartyFromV1 = (p: any, target: any) => {
+    const verzekeringsnemerNaam =
+      typeof p?.verzekeringsnemerNaam === "string" ? p.verzekeringsnemerNaam : "";
+    const bestuurderNaam =
+      typeof p?.bestuurderNaam === "string" ? p.bestuurderNaam : "";
+
+    const [vhVoornaam, ...vhNaamParts] = verzekeringsnemerNaam
+      .split(" ")
+      .filter(Boolean);
+    const vhNaam = vhNaamParts.join(" ");
+
+    const [bdVoornaam, ...bdNaamParts] = bestuurderNaam
+      .split(" ")
+      .filter(Boolean);
+    const bdNaam = bdNaamParts.join(" ");
+
+    return {
+      ...target,
+      verzekeringsnemerType: "company",
+      verzekeringsnemer: {
+        ...target.verzekeringsnemer,
+        voornaam: vhVoornaam ?? "",
+        naam: vhNaam ?? "",
+        telefoon: typeof p?.telefoon === "string" ? p.telefoon : "",
+        email: typeof p?.email === "string" ? p.email : "",
+        adres: {
+          ...target.verzekeringsnemer.adres,
+          straat: typeof p?.adres === "string" ? p.adres : "",
+          postcode: typeof p?.postcode === "string" ? p.postcode : "",
+          stad: typeof p?.stad === "string" ? p.stad : "",
+          land: typeof p?.land === "string" ? p.land : target.verzekeringsnemer.adres.land,
+        },
+      },
+      bestuurder: {
+        ...target.bestuurder,
+        voornaam: bdVoornaam ?? "",
+        naam: bdNaam ?? "",
+        rijbewijsNummer:
+          typeof p?.rijbewijsNummer === "string" ? p.rijbewijsNummer : "",
+      },
+      verzekering: {
+        maatschappij: typeof p?.maatschappij === "string" ? p.maatschappij : "",
+        polisnummer: typeof p?.polisnummer === "string" ? p.polisnummer : "",
+      },
+      voertuig: {
+        merkModel:
+          [p?.merk, p?.typeVoertuig].filter((s: any) => typeof s === "string" && s.trim()).join(" "),
+        nummerplaat: typeof p?.nummerplaat === "string" ? p.nummerplaat : "",
+        landInschrijving: "België",
+      },
+    };
+  };
+
+  let partyA = base.partyA;
+  let partyB = base.partyB;
+  if (maybeV1Party(o.partyA)) partyA = migratePartyFromV1(o.partyA, base.partyA);
+  if (maybeV1Party(o.partyB)) partyB = migratePartyFromV1(o.partyB, base.partyB);
+
+  const merged: AccidentReportState = {
+    ...base,
+    ...o,
+    location: { ...base.location, ...(o.location as object) },
+    employeeDriver: {
+      ...base.employeeDriver,
+      ...(typeof o.employeeDriver === "object" && o.employeeDriver ? (o.employeeDriver as any) : {}),
+      adres: {
+        ...base.employeeDriver.adres,
+        ...(typeof (o as any).employeeDriver?.adres === "object" && (o as any).employeeDriver?.adres
+          ? ((o as any).employeeDriver.adres as any)
+          : {}),
+      },
+    },
+    otherDriver: {
+      ...base.otherDriver,
+      ...(typeof o.otherDriver === "object" && o.otherDriver ? (o.otherDriver as any) : {}),
+      adres: {
+        ...base.otherDriver.adres,
+        ...(typeof (o as any).otherDriver?.adres === "object" && (o as any).otherDriver?.adres
+          ? ((o as any).otherDriver.adres as any)
+          : {}),
+      },
+    },
+    partyA:
+      typeof o.partyA === "object" && o.partyA && !maybeV1Party(o.partyA)
+        ? ({
+            ...base.partyA,
+            ...(o.partyA as any),
+            verzekeringsnemer: {
+              ...base.partyA.verzekeringsnemer,
+              ...((o.partyA as any)?.verzekeringsnemer ?? {}),
+              adres: {
+                ...base.partyA.verzekeringsnemer.adres,
+                ...((o.partyA as any)?.verzekeringsnemer?.adres ?? {}),
+              },
+            },
+            bestuurder: {
+              ...base.partyA.bestuurder,
+              ...((o.partyA as any)?.bestuurder ?? {}),
+              adres: {
+                ...base.partyA.bestuurder.adres,
+                ...((o.partyA as any)?.bestuurder?.adres ?? {}),
+              },
+            },
+            verzekering: { ...base.partyA.verzekering, ...((o.partyA as any)?.verzekering ?? {}) },
+            voertuig: { ...base.partyA.voertuig, ...((o.partyA as any)?.voertuig ?? {}) },
+          } as any)
+        : partyA,
+    partyB:
+      typeof o.partyB === "object" && o.partyB && !maybeV1Party(o.partyB)
+        ? ({
+            ...base.partyB,
+            ...(o.partyB as any),
+            verzekeringsnemer: {
+              ...base.partyB.verzekeringsnemer,
+              ...((o.partyB as any)?.verzekeringsnemer ?? {}),
+              adres: {
+                ...base.partyB.verzekeringsnemer.adres,
+                ...((o.partyB as any)?.verzekeringsnemer?.adres ?? {}),
+              },
+            },
+            bestuurder: {
+              ...base.partyB.bestuurder,
+              ...((o.partyB as any)?.bestuurder ?? {}),
+              adres: {
+                ...base.partyB.bestuurder.adres,
+                ...((o.partyB as any)?.bestuurder?.adres ?? {}),
+              },
+            },
+            verzekering: { ...base.partyB.verzekering, ...((o.partyB as any)?.verzekering ?? {}) },
+            voertuig: { ...base.partyB.voertuig, ...((o.partyB as any)?.voertuig ?? {}) },
+          } as any)
+        : partyB,
+    dismissedBanners: {
+      ...base.dismissedBanners,
+      ...(typeof o.dismissedBanners === "object" && o.dismissedBanners
+        ? (o.dismissedBanners as Record<string, boolean>)
+        : {}),
+    },
+    currentStepId: (o.currentStepId as OngevalStepId) ?? base.currentStepId,
+    navigationHistory: Array.isArray(o.navigationHistory)
+      ? (o.navigationHistory as OngevalStepId[])
+      : base.navigationHistory,
+  } as AccidentReportState;
+
+  // Guard against legacy step ids.
+  const legacySteps = new Set([
+    "party_a_mode",
+    "party_a_form",
+    "party_b_mode",
+    "party_b_form",
+  ]);
+  if (legacySteps.has(String((o as any).currentStepId))) {
+    merged.currentStepId = "driver_select";
+    merged.navigationHistory = [];
+  }
+
+  return merged;
+}
