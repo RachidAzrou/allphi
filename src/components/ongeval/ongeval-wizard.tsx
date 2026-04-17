@@ -209,7 +209,12 @@ export function OngevalWizard({
           if (Date.now() - localEditAtRef.current < 1200) return;
           setState((prev) => {
             const merged = mergePayloadIntoState(remotePayload);
-            // Avoid unnecessary rerenders if payload is identical.
+            // Keep navigation/role strictly per-device so Partij A and Partij B
+            // can move through the wizard independently on their own toestel.
+            merged.currentStepId = prev.currentStepId;
+            merged.navigationHistory = prev.navigationHistory;
+            merged.role = prev.role;
+            merged.dismissedBanners = prev.dismissedBanners;
             if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
             return merged;
           });
@@ -291,6 +296,22 @@ export function OngevalWizard({
     if (stepId !== "share_qr") return;
     void ensureJoinQr("existing");
   }, [ensureJoinQr, stepId]);
+
+  // Auto-advance Partij A uit de QR-deelstap zodra Partij B gekoppeld is, zodat
+  // A niet blijft hangen op de QR-pagina.
+  const autoAdvancedFromShareQrRef = useRef(false);
+  useEffect(() => {
+    if (stepId !== "share_qr") {
+      autoAdvancedFromShareQrRef.current = false;
+      return;
+    }
+    if (state.role !== "A") return;
+    if (!partyBJoinedAt) return;
+    if (autoAdvancedFromShareQrRef.current) return;
+    autoAdvancedFromShareQrRef.current = true;
+    toast.success("Partij B is gekoppeld. Ga verder met plaats en tijd.");
+    setState((prev) => advanceState(prev, "location_time"));
+  }, [stepId, state.role, partyBJoinedAt]);
 
   const goNext = useCallback(() => {
     if (!validateStep(stepId, state)) {

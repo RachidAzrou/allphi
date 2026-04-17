@@ -160,6 +160,7 @@ export function getNextStepId(
     case "scan_qr":
       return "location_time";
     case "party_b_language":
+      if (state.role === "B") return "party_b_form";
       return "party_b_optional";
     case "party_b_optional":
       return afterPartyBOptional(state);
