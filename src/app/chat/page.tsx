@@ -9,6 +9,10 @@ import { WelcomeCard } from "@/components/welcome-card";
 import { ChatMessageList } from "@/components/chat-message-list";
 import { ChatComposer } from "@/components/chat-composer";
 import { LoadingState } from "@/components/loading-state";
+import {
+  DraftChoiceDialog,
+  type DraftRow,
+} from "@/components/ongeval/draft-choice-dialog";
 import type { ChatMessage, ChatPostResponse } from "@/types/chat";
 import { createInitialAccidentState } from "@/types/ongeval";
 
@@ -19,9 +23,38 @@ export default function ChatPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userDisplayName, setUserDisplayName] = useState("");
   const [voornaam, setVoornaam] = useState("");
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
 
   const router = useRouter();
   const supabase = createClient();
+
+  const createNewDraftAndNavigate = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user?.id) {
+      toast.error("Je moet ingelogd zijn.");
+      return;
+    }
+    const payload = createInitialAccidentState();
+    const { data: row, error } = await supabase
+      .from("ongeval_aangiften")
+      .insert({
+        user_id: user.id,
+        status: "draft",
+        payload: payload as unknown as Record<string, unknown>,
+      })
+      .select("id")
+      .single();
+
+    if (error || !row?.id) {
+      console.error(error);
+      toast.error("Kon de wizard niet openen. Probeer via het menu Ongeval melden.");
+      return;
+    }
+    router.push(`/ongeval/${row.id}?returnTo=/chat`);
+  }, [router, supabase]);
 
   const openAccidentWizard = useCallback(async () => {
     try {
@@ -32,42 +65,59 @@ export default function ChatPage() {
         toast.error("Je moet ingelogd zijn.");
         return;
       }
-      const { data: draft } = await supabase
+      const { data: rows } = await supabase
         .from("ongeval_aangiften")
-        .select("id, payload")
+        .select("id, payload, updated_at")
         .eq("user_id", user.id)
         .eq("status", "draft")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("updated_at", { ascending: false });
 
-      if (draft?.id) {
-        router.push(`/ongeval/${draft.id}?returnTo=/chat`);
+      const list = (rows ?? []) as DraftRow[];
+      if (list.length === 0) {
+        await createNewDraftAndNavigate();
         return;
       }
-
-      const payload = createInitialAccidentState();
-      const { data: row, error } = await supabase
-        .from("ongeval_aangiften")
-        .insert({
-          user_id: user.id,
-          status: "draft",
-          payload: payload as unknown as Record<string, unknown>,
-        })
-        .select("id")
-        .single();
-
-      if (error || !row?.id) {
-        console.error(error);
-        toast.error("Kon de wizard niet openen. Probeer via het menu Ongeval melden.");
-        return;
-      }
-      router.push(`/ongeval/${row.id}?returnTo=/chat`);
+      setDrafts(list);
+      setDraftsDialogOpen(true);
     } catch (e) {
       console.error(e);
       toast.error("Kon de wizard niet openen.");
     }
-  }, [supabase]);
+  }, [supabase, createNewDraftAndNavigate]);
+
+  const handleContinueDraft = useCallback(
+    (id: string) => {
+      setDraftsDialogOpen(false);
+      router.push(`/ongeval/${id}?returnTo=/chat`);
+    },
+    [router],
+  );
+
+  const handleStartNew = useCallback(async () => {
+    setDraftsDialogOpen(false);
+    await createNewDraftAndNavigate();
+  }, [createNewDraftAndNavigate]);
+
+  const handleDeleteDraft = useCallback(
+    async (id: string) => {
+      const { error } = await supabase
+        .from("ongeval_aangiften")
+        .delete()
+        .eq("id", id);
+      if (error) {
+        console.error(error);
+        toast.error("Kon concept niet verwijderen.");
+        return;
+      }
+      setDrafts((prev) => {
+        const next = prev.filter((d) => d.id !== id);
+        if (next.length === 0) setDraftsDialogOpen(false);
+        return next;
+      });
+      toast.success("Concept verwijderd.");
+    },
+    [supabase],
+  );
 
   const loadMessages = useCallback(async () => {
     const res = await fetch("/api/chat/messages", { credentials: "same-origin" });
@@ -254,6 +304,14 @@ export default function ChatPage() {
 
             <ChatComposer onSend={sendMessage} disabled={isLoading} />
           </main>
+          <DraftChoiceDialog
+            open={draftsDialogOpen}
+            onOpenChange={setDraftsDialogOpen}
+            drafts={drafts}
+            onContinue={handleContinueDraft}
+            onStartNew={handleStartNew}
+            onDelete={handleDeleteDraft}
+          />
         </>
       )}
     </div>

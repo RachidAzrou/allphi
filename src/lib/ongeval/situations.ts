@@ -167,6 +167,50 @@ export const LANE_CHANGE_OPTIONS: SituationOption[] = [
   },
 ];
 
+export function getSituationCategoryLabel(
+  id: SituationCategoryId | null,
+): string {
+  if (!id) return "";
+  return SITUATION_CATEGORIES.find((c) => c.id === id)?.title ?? "";
+}
+
+export function getSituationDetailLabel(
+  category: SituationCategoryId | null,
+  detailKey: string | null,
+): string {
+  if (!category || !detailKey) return "";
+  const pool: SituationOption[] = (() => {
+    switch (category) {
+      case "rear_end":
+        return REAR_END_OPTIONS;
+      case "opposite":
+        return CENTER_LINE_OPTIONS;
+      case "priority":
+        return PRIORITY_OPTIONS;
+      case "maneuver":
+        return [...MANEUVER_A_OPTIONS, ...MANEUVER_B_OPTIONS];
+      case "lane_change":
+        return LANE_CHANGE_OPTIONS;
+      case "parking":
+      case "door":
+      case "load":
+        return GENERIC_SINGLE[category] ?? [];
+      default:
+        return [];
+    }
+  })();
+  return pool.find((o) => o.id === detailKey)?.title ?? "";
+}
+
+export function getManeuverLabel(
+  party: "A" | "B",
+  key: string | null,
+): string {
+  if (!key) return "";
+  const pool = party === "A" ? MANEUVER_A_OPTIONS : MANEUVER_B_OPTIONS;
+  return pool.find((o) => o.id === key)?.title ?? "";
+}
+
 export const GENERIC_SINGLE: Record<
   SituationCategoryId,
   SituationOption[] | null

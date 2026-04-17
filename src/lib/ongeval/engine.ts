@@ -3,6 +3,7 @@ import type {
   OngevalStepId,
 } from "@/types/ongeval";
 import { createInitialAccidentState } from "@/types/ongeval";
+import { toIsoDate, toIsoTime } from "@/lib/ongeval/date-utils";
 
 const PHASE_ORDER: OngevalStepId[][] = [
   [
@@ -40,13 +41,7 @@ const PHASE_ORDER: OngevalStepId[][] = [
   ["proposal_intro", "proposal_decision", "circumstances_manual"],
   ["vehicle_contact", "impact_party_a", "impact_party_b"],
   ["overview_intro", "overview_detail"],
-  [
-    "signature_a_intro",
-    "signature_a",
-    "signature_b_intro",
-    "signature_b",
-    "complete",
-  ],
+  ["signature_a", "signature_b", "complete"],
 ];
 
 export function getProgressForStep(stepId: OngevalStepId): {
@@ -205,12 +200,8 @@ export function getNextStepId(
     case "overview_intro":
       return "overview_detail";
     case "overview_detail":
-      return "signature_a_intro";
-    case "signature_a_intro":
       return "signature_a";
     case "signature_a":
-      return "signature_b_intro";
-    case "signature_b_intro":
       return "signature_b";
     case "signature_b":
       return "complete";
@@ -223,7 +214,7 @@ export function getNextStepId(
 
 /** Skip overview detail (user already saw intro) — goes to first signature step. */
 export function getNextAfterOverviewSkip(): OngevalStepId {
-  return "signature_a_intro";
+  return "signature_a";
 }
 
 export function getPreviousStepId(state: AccidentReportState): OngevalStepId | null {
@@ -328,7 +319,9 @@ export function validateStep(
         state.partyB.verzekering.maatschappij.trim().length > 0 &&
         state.partyB.verzekering.polisnummer.trim().length > 0 &&
         state.partyB.voertuig.merkModel.trim().length > 0 &&
-        state.partyB.voertuig.nummerplaat.trim().length > 0
+        state.partyB.voertuig.nummerplaat.trim().length > 0 &&
+        state.partyB.bestuurder.voornaam.trim().length > 0 &&
+        state.partyB.bestuurder.naam.trim().length > 0
       );
     case "location_time":
       return (
@@ -374,12 +367,8 @@ export function validateStep(
       return true;
     case "overview_detail":
       return true;
-    case "signature_a_intro":
-      return true;
     case "signature_a":
       return state.signaturePartyA !== null;
-    case "signature_b_intro":
-      return true;
     case "signature_b":
       return state.signaturePartyB !== null;
     case "complete":
@@ -427,9 +416,7 @@ export function getStepTitle(stepId: OngevalStepId): string {
     impact_party_b: "Raakpunt voertuig B",
     overview_intro: "Overzicht ongevalsaangifte",
     overview_detail: "Overzicht",
-    signature_a_intro: "Handtekening A",
     signature_a: "Handtekening A",
-    signature_b_intro: "Handtekening B",
     signature_b: "Handtekening B",
     complete: "Voltooiing",
   };
@@ -594,17 +581,55 @@ export function mergePayloadIntoState(
       : base.navigationHistory,
   } as AccidentReportState;
 
-  // Guard against legacy step ids.
-  const legacySteps = new Set([
-    "party_a_mode",
-    "party_a_form",
-    "party_b_mode",
-    "party_b_form",
-  ]);
-  if (legacySteps.has(String((o as any).currentStepId))) {
+  // Guard against legacy step ids that no longer exist in the flow.
+  const legacyReset = new Set(["party_a_mode", "party_b_mode"]);
+  if (legacyReset.has(String((o as any).currentStepId))) {
     merged.currentStepId = "driver_select";
     merged.navigationHistory = [];
   }
+  // Mappings voor hernoemde stappen zodat oude drafts niet naar het begin vallen.
+  const legacyStepMap: Record<string, OngevalStepId> = {
+    signature_a_intro: "signature_a",
+    signature_b_intro: "signature_b",
+    party_a_form: "policyholder_form",
+  };
+  const rawCurrent = String((o as { currentStepId?: unknown }).currentStepId ?? "");
+  const mapped = legacyStepMap[rawCurrent];
+  if (mapped) {
+    merged.currentStepId = mapped;
+  }
+  merged.navigationHistory = merged.navigationHistory
+    .map((s) => legacyStepMap[String(s)] ?? s)
+    .filter((s): s is OngevalStepId => !legacyReset.has(String(s)));
+
+  // Normaliseer datum/uur-velden naar ISO (matcht native <input type="date"/"time">).
+  merged.location = {
+    ...merged.location,
+    datum: toIsoDate(merged.location.datum),
+    tijd: toIsoTime(merged.location.tijd),
+  };
+  merged.employeeDriver = {
+    ...merged.employeeDriver,
+    geboortedatum: toIsoDate(merged.employeeDriver.geboortedatum),
+  };
+  merged.otherDriver = {
+    ...merged.otherDriver,
+    geboortedatum: toIsoDate(merged.otherDriver.geboortedatum),
+  };
+  merged.partyA = {
+    ...merged.partyA,
+    bestuurder: {
+      ...merged.partyA.bestuurder,
+      geboortedatum: toIsoDate(merged.partyA.bestuurder.geboortedatum),
+    },
+  };
+  merged.partyB = {
+    ...merged.partyB,
+    bestuurder: {
+      ...merged.partyB.bestuurder,
+      geboortedatum: toIsoDate(merged.partyB.bestuurder.geboortedatum),
+    },
+  };
 
   return merged;
 }

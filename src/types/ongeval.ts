@@ -42,9 +42,7 @@ export type OngevalStepId =
   | "impact_party_b"
   | "overview_intro"
   | "overview_detail"
-  | "signature_a_intro"
   | "signature_a"
-  | "signature_b_intro"
   | "signature_b"
   | "complete";
 

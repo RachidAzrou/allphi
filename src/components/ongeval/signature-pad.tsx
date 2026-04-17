@@ -10,12 +10,36 @@ type SignaturePadProps = {
   className?: string;
 };
 
+/**
+ * Canvas-gebaseerd handtekeningveld. Slaat tekening op als PNG dataURL in `value`.
+ *
+ * Belangrijk voor de bug-fix: we mogen `value` NIET in de deps van de
+ * resize-effect zetten, anders wordt bij elke stroke de canvas opnieuw
+ * gedimensioneerd en wist de canvas (native gedrag bij canvas.width/height).
+ */
 export function SignaturePad({ value, onChange, className }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const [hasStroke, setHasStroke] = useState(false);
+  const drawingRef = useRef(false);
+  const lastValueRef = useRef<string | null>(null);
+  const [dimensioned, setDimensioned] = useState(false);
 
-  const resizeCanvas = useCallback(() => {
+  const drawImageOnCanvas = useCallback((dataUrl: string | null) => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    const cssW = c.clientWidth;
+    const cssH = c.clientHeight;
+    ctx.clearRect(0, 0, cssW, cssH);
+    if (!dataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, cssW, cssH);
+    };
+    img.src = dataUrl;
+  }, []);
+
+  const dimension = useCallback(() => {
     const c = canvasRef.current;
     if (!c) return;
     const parent = c.parentElement;
@@ -23,6 +47,7 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     const w = parent.clientWidth;
     const h = parent.clientHeight;
+    if (w === 0 || h === 0) return;
     c.width = Math.floor(w * dpr);
     c.height = Math.floor(h * dpr);
     c.style.width = `${w}px`;
@@ -34,21 +59,26 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 2.25;
-    if (value && !hasStroke) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-      };
-      img.src = value;
-    }
-  }, [value, hasStroke]);
+  }, []);
 
   useEffect(() => {
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
-    return () => window.removeEventListener("resize", resizeCanvas);
-  }, [resizeCanvas]);
+    dimension();
+    setDimensioned(true);
+    const onResize = () => {
+      dimension();
+      drawImageOnCanvas(lastValueRef.current);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!dimensioned) return;
+    if (lastValueRef.current === value) return;
+    lastValueRef.current = value;
+    drawImageOnCanvas(value);
+  }, [value, dimensioned, drawImageOnCanvas]);
 
   const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const c = canvasRef.current;
@@ -60,17 +90,16 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
   const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     canvasRef.current?.setPointerCapture(e.pointerId);
-    drawing.current = true;
+    drawingRef.current = true;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getPos(e);
     ctx.beginPath();
     ctx.moveTo(x, y);
-    setHasStroke(true);
   };
 
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
+    if (!drawingRef.current) return;
     e.preventDefault();
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
@@ -80,8 +109,8 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
   };
 
   const end = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
-    drawing.current = false;
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
     try {
       canvasRef.current?.releasePointerCapture(e.pointerId);
     } catch {
@@ -89,7 +118,9 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     }
     const c = canvasRef.current;
     if (c) {
-      onChange(c.toDataURL("image/png"));
+      const dataUrl = c.toDataURL("image/png");
+      lastValueRef.current = dataUrl;
+      onChange(dataUrl);
     }
   };
 
@@ -98,8 +129,8 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     if (!c) return;
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, c.width, c.height);
-    setHasStroke(false);
+    ctx.clearRect(0, 0, c.clientWidth, c.clientHeight);
+    lastValueRef.current = null;
     onChange(null);
   };
 

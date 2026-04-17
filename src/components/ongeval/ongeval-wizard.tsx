@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WizardFooterButton, WizardShell } from "@/components/ongeval/wizard-shell";
 import { ImpactDiagram } from "@/components/ongeval/impact-diagram";
+import { LocationPicker } from "@/components/ongeval/location-picker";
 import { SignaturePad } from "@/components/ongeval/signature-pad";
 import { STEP_BANNERS } from "@/components/ongeval/step-banners";
 import {
@@ -45,6 +46,7 @@ import {
   popHistory,
   validateStep,
 } from "@/lib/ongeval/engine";
+import { toIsoDate } from "@/lib/ongeval/date-utils";
 import {
   CENTER_LINE_OPTIONS,
   GENERIC_SINGLE,
@@ -54,7 +56,11 @@ import {
   PRIORITY_OPTIONS,
   REAR_END_OPTIONS,
   SITUATION_CATEGORIES,
+  getSituationCategoryLabel,
+  getSituationDetailLabel,
+  getManeuverLabel,
 } from "@/lib/ongeval/situations";
+import { formatDateForDisplay, formatTimeForDisplay } from "@/lib/ongeval/date-utils";
 import type {
   AccidentReportState,
   OngevalStepId,
@@ -297,6 +303,32 @@ export function OngevalWizard({
     void ensureJoinQr("existing");
   }, [ensureJoinQr, stepId]);
 
+  // Fallback polling voor partyBJoinedAt zolang A op share_qr wacht — dekt
+  // scenario waarbij Supabase-realtime (postgres_changes) niet actief is.
+  useEffect(() => {
+    if (stepId !== "share_qr") return;
+    if (state.role !== "A") return;
+    if (partyBJoinedAt) return;
+    let cancelled = false;
+    const interval = window.setInterval(async () => {
+      if (cancelled) return;
+      const { data } = await supabase
+        .from("ongeval_aangiften")
+        .select("party_b_joined_at")
+        .eq("id", reportId)
+        .maybeSingle();
+      const joined = (data as { party_b_joined_at?: string | null } | null)?.party_b_joined_at ?? null;
+      if (joined) {
+        setPartyBJoinedAt(joined);
+        window.clearInterval(interval);
+      }
+    }, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [stepId, state.role, partyBJoinedAt, reportId, supabase]);
+
   // Auto-advance Partij A uit de QR-deelstap zodra Partij B gekoppeld is, zodat
   // A niet blijft hangen op de QR-pagina.
   const autoAdvancedFromShareQrRef = useRef(false);
@@ -424,15 +456,6 @@ export function OngevalWizard({
       setState((prev) => {
         const next = { ...prev };
 
-        const toEuropeanDate = (value: string) => {
-          const v = value.trim();
-          // Supabase date columns often arrive as "YYYY-MM-DD"
-          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-          if (!m) return value;
-          const [, yyyy, mm, dd] = m;
-          return `${dd}/${mm}/${yyyy}`;
-        };
-
         // Prefill employee driver basics
         if ((medewerker as any)?.voornaam && !next.employeeDriver.voornaam) {
           next.employeeDriver = {
@@ -463,7 +486,7 @@ export function OngevalWizard({
         if (geboortedatum && !next.employeeDriver.geboortedatum) {
           next.employeeDriver = {
             ...next.employeeDriver,
-            geboortedatum: toEuropeanDate(geboortedatum),
+            geboortedatum: toIsoDate(geboortedatum),
           };
         }
 
@@ -503,7 +526,7 @@ export function OngevalWizard({
 
           setBestuurderIfEmpty("voornaam", ed.voornaam);
           setBestuurderIfEmpty("naam", ed.naam);
-          setBestuurderIfEmpty("geboortedatum", toEuropeanDate(ed.geboortedatum));
+          setBestuurderIfEmpty("geboortedatum", toIsoDate(ed.geboortedatum));
           setBestuurderIfEmpty("email", ed.email);
           setBestuurderIfEmpty("telefoon", ed.telefoon);
           setBestuurderIfEmpty("rijbewijsNummer", ed.rijbewijsNummer);
@@ -853,6 +876,152 @@ export function OngevalWizard({
             </Field>
           </div>
         </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
+            Bestuurder (partij B)
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Voornaam">
+              <Input
+                value={p.bestuurder.voornaam}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: { ...p.bestuurder, voornaam: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Naam">
+              <Input
+                value={p.bestuurder.naam}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: { ...p.bestuurder, naam: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <Field label="Geboortedatum">
+            <Input
+              type="date"
+              value={p.bestuurder.geboortedatum}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    bestuurder: { ...p.bestuurder, geboortedatum: e.target.value },
+                  },
+                })
+              }
+            />
+          </Field>
+          <Field label="Rijbewijsnummer">
+            <Input
+              value={p.bestuurder.rijbewijsNummer}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    bestuurder: {
+                      ...p.bestuurder,
+                      rijbewijsNummer: e.target.value,
+                    },
+                  },
+                })
+              }
+            />
+          </Field>
+          <Field label="Straat">
+            <Input
+              value={p.bestuurder.adres.straat}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    bestuurder: {
+                      ...p.bestuurder,
+                      adres: { ...p.bestuurder.adres, straat: e.target.value },
+                    },
+                  },
+                })
+              }
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="Huisnr.">
+              <Input
+                value={p.bestuurder.adres.huisnummer}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: {
+                        ...p.bestuurder,
+                        adres: { ...p.bestuurder.adres, huisnummer: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Postcode">
+              <Input
+                value={p.bestuurder.adres.postcode}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: {
+                        ...p.bestuurder,
+                        adres: { ...p.bestuurder.adres, postcode: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Stad">
+              <Input
+                value={p.bestuurder.adres.stad}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: {
+                        ...p.bestuurder,
+                        adres: { ...p.bestuurder.adres, stad: e.target.value },
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <Field label="Land">
+            <Input
+              value={p.bestuurder.adres.land}
+              onChange={(e) =>
+                updateState({
+                  partyB: {
+                    ...p,
+                    bestuurder: {
+                      ...p.bestuurder,
+                      adres: { ...p.bestuurder.adres, land: e.target.value },
+                    },
+                  },
+                })
+              }
+            />
+          </Field>
+        </section>
       </div>
     );
   }
@@ -928,7 +1097,7 @@ export function OngevalWizard({
               </div>
               <Field label="Geboortedatum">
                 <Input
-                  placeholder="DD/MM/JJJJ"
+                  type="date"
                   value={d.geboortedatum}
                   onChange={(e) =>
                     updateState({
@@ -1151,7 +1320,7 @@ export function OngevalWizard({
               </div>
               <Field label="Geboortedatum">
                 <Input
-                  placeholder="DD/MM/JJJJ"
+                  type="date"
                   value={d.geboortedatum}
                   onChange={(e) =>
                     updateState({
@@ -1730,6 +1899,27 @@ export function OngevalWizard({
       case "location_time":
         return (
           <div className="flex flex-col gap-3 px-4 py-4">
+            <LocationPicker
+              value={{
+                straat: state.location.straat,
+                huisnummer: state.location.huisnummer,
+                postcode: state.location.postcode,
+                stad: state.location.stad,
+                land: state.location.land,
+              }}
+              onChange={(next) =>
+                updateState({
+                  location: {
+                    ...state.location,
+                    straat: next.straat || state.location.straat,
+                    huisnummer: next.huisnummer || state.location.huisnummer,
+                    postcode: next.postcode || state.location.postcode,
+                    stad: next.stad || state.location.stad,
+                    land: next.land || state.location.land,
+                  },
+                })
+              }
+            />
             <Field label="Straat">
               <Input
                 value={state.location.straat}
@@ -1785,8 +1975,7 @@ export function OngevalWizard({
             <div className="grid grid-cols-2 gap-2">
               <Field label="Datum">
                 <Input
-                  type="text"
-                  placeholder="DD/MM/JJJJ"
+                  type="date"
                   value={state.location.datum}
                   onChange={(e) =>
                     updateState({
@@ -1797,8 +1986,7 @@ export function OngevalWizard({
               </Field>
               <Field label="Uur">
                 <Input
-                  type="text"
-                  placeholder="UU:MM"
+                  type="time"
                   value={state.location.tijd}
                   onChange={(e) =>
                     updateState({
@@ -2091,34 +2279,24 @@ export function OngevalWizard({
         );
       case "overview_detail":
         return <OverviewTabs state={state} />;
-      case "signature_a_intro":
-        return (
-          <div className="px-4 py-16">
-            <p className="text-center text-[16px] text-[#163247]">
-              Handtekening op het volgende scherm
-            </p>
-          </div>
-        );
       case "signature_a":
         return (
-          <div className="flex min-h-[280px] flex-col px-4 py-4">
+          <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
+            <p className="text-[14px] leading-relaxed text-[#5F7382]">
+              Teken hieronder de handtekening van <strong className="font-semibold text-[#163247]">bestuurder A</strong>. Gebruik vinger of stylus.
+            </p>
             <SignaturePad
               value={state.signaturePartyA}
               onChange={(signaturePartyA) => updateState({ signaturePartyA })}
             />
           </div>
         );
-      case "signature_b_intro":
-        return (
-          <div className="px-4 py-16">
-            <p className="text-center text-[16px] text-[#163247]">
-              Handtekening bestuurder B op het volgende scherm
-            </p>
-          </div>
-        );
       case "signature_b":
         return (
-          <div className="flex min-h-[280px] flex-col px-4 py-4">
+          <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
+            <p className="text-[14px] leading-relaxed text-[#5F7382]">
+              Teken hieronder de handtekening van <strong className="font-semibold text-[#163247]">bestuurder B</strong>. Gebruik vinger of stylus.
+            </p>
             <SignaturePad
               value={state.signaturePartyB}
               onChange={(signaturePartyB) => updateState({ signaturePartyB })}
@@ -2127,42 +2305,10 @@ export function OngevalWizard({
         );
       case "complete":
         return (
-          <div className="flex flex-col gap-4 px-4 py-12">
-            <p className="text-center text-[18px] font-semibold text-[#163247]">
-              Aangifte voltooid
-            </p>
-            <p className="text-center text-[14px] leading-relaxed text-[#5F7382]">
-              Download het ingevulde Europees aanrijdingsformulier en sluit
-              daarna af. Het dossier wordt als voltooid gemarkeerd in deze app.
-            </p>
-            <div className="mx-auto mt-2 w-full max-w-sm">
-              <Button
-                type="button"
-                className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white hover:bg-[#1e7bb0]"
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`/api/ongeval/${reportId}/pdf`, {
-                      method: "GET",
-                    });
-                    if (!res.ok) throw new Error("pdf");
-                    const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `aanrijdingsformulier-${reportId}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                  } catch {
-                    toast.error("PDF downloaden mislukt.");
-                  }
-                }}
-              >
-                Download PDF
-              </Button>
-            </div>
-          </div>
+          <PdfPreviewStep
+            reportId={reportId}
+            guestSecret={guestSecret}
+          />
         );
       default:
         return null;
@@ -2201,7 +2347,7 @@ export function OngevalWizard({
         />
       );
     }
-    if (stepId === "overview_intro") {
+    if (stepId === "overview_detail") {
       return (
         <div className="flex flex-col">
           <button
@@ -2472,16 +2618,38 @@ function OptionList({
 
 function OverviewTabs({ state }: { state: AccidentReportState }) {
   const [tab, setTab] = useState<
-    "locatie" | "vragen" | "getuigen" | "gegevens"
+    "locatie" | "vragen" | "getuigen" | "gegevens" | "raakpunt"
   >("locatie");
   const loc = state.location;
+  const yesNo = (v: boolean | null) =>
+    v === null ? null : v ? "Ja" : "Nee";
+  const personLine = (p: {
+    voornaam: string;
+    naam: string;
+  }) => [p.voornaam, p.naam].filter(Boolean).join(" ");
+  const addressLine = (a: {
+    straat: string;
+    huisnummer: string;
+    bus?: string;
+    postcode: string;
+    stad: string;
+    land: string;
+  }) => {
+    const street = [a.straat, a.huisnummer].filter(Boolean).join(" ");
+    const bus = a.bus ? ` bus ${a.bus}` : "";
+    const city = [a.postcode, a.stad].filter(Boolean).join(" ");
+    const parts = [street + bus, city, a.land].filter((p) => p && p.trim());
+    return parts.join(", ");
+  };
+
   return (
     <div className="flex min-h-[320px] flex-col">
-      <div className="flex border-b border-black/[0.08] bg-white px-2">
+      <div className="flex overflow-x-auto border-b border-black/[0.08] bg-white px-2">
         {(
           [
             ["locatie", "Locatie"],
             ["vragen", "Vragen"],
+            ["raakpunt", "Raakpunt"],
             ["getuigen", "Getuigen"],
             ["gegevens", "Gegevens"],
           ] as const
@@ -2490,7 +2658,7 @@ function OverviewTabs({ state }: { state: AccidentReportState }) {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`min-h-11 flex-1 border-b-2 px-1 py-2 text-[13px] font-medium ${
+            className={`min-h-11 flex-shrink-0 flex-1 border-b-2 px-2 py-2 text-[13px] font-medium ${
               tab === id
                 ? "border-[#2799D7] text-[#2799D7]"
                 : "border-transparent text-[#5F7382]"
@@ -2511,75 +2679,190 @@ function OverviewTabs({ state }: { state: AccidentReportState }) {
               <Row label="Land" value={loc.land} />
             </Section>
             <Section title="Tijdstip">
-              <Row label="Datum" value={loc.datum} />
-              <Row label="Uur" value={loc.tijd} />
+              <Row label="Datum" value={formatDateForDisplay(loc.datum)} />
+              <Row label="Uur" value={formatTimeForDisplay(loc.tijd)} />
+            </Section>
+            <Section title="Schade & letsels">
+              <Row
+                label="Gewonden"
+                value={yesNo(state.gewonden) ?? "Niet opgegeven"}
+              />
+              <Row
+                label="Andere materiële schade"
+                value={yesNo(state.materieleSchadeAnders) ?? "Niet opgegeven"}
+              />
             </Section>
           </>
         ) : null}
         {tab === "vragen" ? (
-          <Section title="Samenvatting">
-            <Row
-              label="Ongevalstype"
-              value={state.situationCategory ?? "—"}
-            />
-            <Row label="Detail" value={state.situationDetailKey ?? "—"} />
-            <Row
-              label="Voorstel aanvaard"
-              value={
-                state.proposalAccepted === null
-                  ? "—"
-                  : state.proposalAccepted
-                    ? "Ja"
-                    : "Nee"
-              }
-            />
-            <Row
-              label="Contact tussen voertuigen"
-              value={
-                state.vehicleContact === null
-                  ? "—"
-                  : state.vehicleContact
-                    ? "Ja"
-                    : "Nee"
-              }
-            />
-          </Section>
-        ) : null}
-        {tab === "getuigen" ? (
-          <Section title="Getuigen">
-            <p className="whitespace-pre-wrap text-[14px] text-[#163247]">
-              {state.getuigen || "—"}
-            </p>
-          </Section>
-        ) : null}
-        {tab === "gegevens" ? (
           <>
-            <Section title="Voertuig A">
+            <Section title="Type ongeval">
               <Row
-                label="Nummerplaat"
-                value={state.partyA.voertuig.nummerplaat}
+                label="Categorie"
+                value={
+                  getSituationCategoryLabel(state.situationCategory) ||
+                  "Nog niet gekozen"
+                }
               />
               <Row
-                label="Bestuurder"
-                value={[state.partyA.bestuurder.voornaam, state.partyA.bestuurder.naam]
-                  .filter(Boolean)
-                  .join(" ")}
+                label="Detail"
+                value={
+                  getSituationDetailLabel(
+                    state.situationCategory,
+                    state.situationDetailKey,
+                  ) || "Geen detail"
+                }
               />
+              {state.situationCategory === "maneuver" ? (
+                <>
+                  <Row
+                    label="Manoeuvre A"
+                    value={
+                      getManeuverLabel("A", state.maneuverAKey) ||
+                      "Geen manoeuvre A"
+                    }
+                  />
+                  <Row
+                    label="Manoeuvre B"
+                    value={
+                      getManeuverLabel("B", state.maneuverBKey) ||
+                      "Geen manoeuvre B"
+                    }
+                  />
+                </>
+              ) : null}
             </Section>
-            <Section title="Voertuig B">
+            <Section title="Minnelijk voorstel">
               <Row
-                label="Nummerplaat"
-                value={state.partyB.voertuig.nummerplaat}
+                label="Voorstel aanvaard"
+                value={yesNo(state.proposalAccepted) ?? "Niet beslist"}
               />
+              {state.proposalAccepted === false ? (
+                <Row
+                  label="Omstandigheden"
+                  value={state.circumstancesNotes || "Geen toelichting"}
+                />
+              ) : null}
+            </Section>
+            <Section title="Contact tussen voertuigen">
               <Row
-                label="Bestuurder"
-                value={[state.partyB.bestuurder.voornaam, state.partyB.bestuurder.naam]
-                  .filter(Boolean)
-                  .join(" ")}
+                label="Was er contact"
+                value={yesNo(state.vehicleContact) ?? "Niet opgegeven"}
               />
             </Section>
           </>
         ) : null}
+        {tab === "raakpunt" ? (
+          <>
+            <Section title="Raakpunt voertuig A">
+              <OverviewImpactPreview party="A" point={state.impactPartyA} />
+            </Section>
+            <Section title="Raakpunt voertuig B">
+              <OverviewImpactPreview party="B" point={state.impactPartyB} />
+            </Section>
+          </>
+        ) : null}
+        {tab === "getuigen" ? (
+          <Section title="Getuigen">
+            {state.getuigen?.trim() ? (
+              <p className="whitespace-pre-wrap text-[14px] text-[#163247]">
+                {state.getuigen}
+              </p>
+            ) : (
+              <p className="text-[14px] italic text-[#5F7382]">
+                Geen getuigen opgegeven.
+              </p>
+            )}
+          </Section>
+        ) : null}
+        {tab === "gegevens" ? (
+          <>
+            <Section title="Bestuurder A">
+              <Row label="Naam" value={personLine(state.partyA.bestuurder) || "Niet ingevuld"} />
+              <Row
+                label="Geboortedatum"
+                value={
+                  formatDateForDisplay(state.partyA.bestuurder.geboortedatum) ||
+                  "Niet ingevuld"
+                }
+              />
+              <Row label="Telefoon" value={state.partyA.bestuurder.telefoon || "Niet ingevuld"} />
+              <Row label="E-mail" value={state.partyA.bestuurder.email || "Niet ingevuld"} />
+              <Row label="Rijbewijs" value={state.partyA.bestuurder.rijbewijsNummer || "Niet ingevuld"} />
+              <Row label="Adres" value={addressLine(state.partyA.bestuurder.adres) || "Niet ingevuld"} />
+            </Section>
+            <Section title="Voertuig A">
+              <Row label="Merk & model" value={state.partyA.voertuig.merkModel || "Niet ingevuld"} />
+              <Row label="Nummerplaat" value={state.partyA.voertuig.nummerplaat || "Niet ingevuld"} />
+              <Row label="Land" value={state.partyA.voertuig.landInschrijving || "Niet ingevuld"} />
+            </Section>
+            <Section title="Verzekering A">
+              <Row label="Maatschappij" value={state.partyA.verzekering.maatschappij || "Niet ingevuld"} />
+              <Row label="Polisnummer" value={state.partyA.verzekering.polisnummer || "Niet ingevuld"} />
+            </Section>
+            <Section title="Verzekeringsnemer A">
+              <Row label="Naam" value={personLine(state.partyA.verzekeringsnemer) || "Niet ingevuld"} />
+              <Row label="Ondernemingsnr." value={state.partyA.verzekeringsnemer.ondernemingsnummer || "—"} />
+              <Row label="Adres" value={addressLine(state.partyA.verzekeringsnemer.adres) || "Niet ingevuld"} />
+            </Section>
+            <Section title="Bestuurder B">
+              <Row label="Naam" value={personLine(state.partyB.bestuurder) || "Niet ingevuld"} />
+              <Row
+                label="Geboortedatum"
+                value={
+                  formatDateForDisplay(state.partyB.bestuurder.geboortedatum) ||
+                  "Niet ingevuld"
+                }
+              />
+              <Row label="Telefoon" value={state.partyB.bestuurder.telefoon || "Niet ingevuld"} />
+              <Row label="E-mail" value={state.partyB.bestuurder.email || "Niet ingevuld"} />
+              <Row label="Rijbewijs" value={state.partyB.bestuurder.rijbewijsNummer || "Niet ingevuld"} />
+              <Row label="Adres" value={addressLine(state.partyB.bestuurder.adres) || "Niet ingevuld"} />
+            </Section>
+            <Section title="Voertuig B">
+              <Row label="Merk & model" value={state.partyB.voertuig.merkModel || "Niet ingevuld"} />
+              <Row label="Nummerplaat" value={state.partyB.voertuig.nummerplaat || "Niet ingevuld"} />
+              <Row label="Land" value={state.partyB.voertuig.landInschrijving || "Niet ingevuld"} />
+            </Section>
+            <Section title="Verzekering B">
+              <Row label="Maatschappij" value={state.partyB.verzekering.maatschappij || "Niet ingevuld"} />
+              <Row label="Polisnummer" value={state.partyB.verzekering.polisnummer || "Niet ingevuld"} />
+            </Section>
+            <Section title="Verzekeringsnemer B">
+              <Row label="Naam" value={personLine(state.partyB.verzekeringsnemer) || "Niet ingevuld"} />
+              <Row label="Adres" value={addressLine(state.partyB.verzekeringsnemer.adres) || "Niet ingevuld"} />
+            </Section>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function OverviewImpactPreview({
+  party,
+  point,
+}: {
+  party: "A" | "B";
+  point: { x: number; y: number } | null;
+}) {
+  if (!point) {
+    return (
+      <p className="text-[14px] italic text-[#5F7382]">
+        Geen raakpunt aangeduid.
+      </p>
+    );
+  }
+  return (
+    <div className="flex justify-center">
+      <div className="relative w-[140px]">
+        <ImpactDiagram
+          label=""
+          party={party}
+          value={point}
+          onChange={() => {}}
+          readOnly
+        />
       </div>
     </div>
   );
@@ -2607,6 +2890,130 @@ function Row({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-[12px] text-[#5F7382]">{label}</p>
       <p className="text-[15px] font-semibold text-[#163247]">{value || "—"}</p>
+    </div>
+  );
+}
+
+function PdfPreviewStep({
+  reportId,
+  guestSecret,
+}: {
+  reportId: string;
+  guestSecret: string | null;
+}) {
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const previewUrl = useMemo(() => {
+    const base = `/api/ongeval/${reportId}/pdf`;
+    return guestSecret ? `${base}?s=${encodeURIComponent(guestSecret)}` : base;
+  }, [reportId, guestSecret]);
+
+  const loadPreview = useCallback(async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(previewUrl, { method: "GET" });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let detail = "Onbekende fout";
+        try {
+          const parsed = JSON.parse(text);
+          detail = parsed?.detail || parsed?.error || detail;
+        } catch {
+          detail = text || `HTTP ${res.status}`;
+        }
+        throw new Error(detail);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "Onbekende fout");
+      toast.error("PDF laden mislukt.");
+    } finally {
+      setLoading(false);
+    }
+  }, [previewUrl]);
+
+  useEffect(() => {
+    void loadPreview();
+    return () => {
+      setPdfUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewUrl]);
+
+  const download = useCallback(() => {
+    const dlUrl = guestSecret
+      ? `${previewUrl}&dl=1`
+      : `${previewUrl}?dl=1`;
+    const a = document.createElement("a");
+    a.href = dlUrl;
+    a.download = `aanrijdingsformulier-${reportId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, [previewUrl, guestSecret, reportId]);
+
+  return (
+    <div className="flex flex-col gap-4 px-4 py-6">
+      <div className="flex flex-col items-center gap-1 text-center">
+        <p className="text-[18px] font-semibold text-[#163247]">
+          Aangifte voltooid
+        </p>
+        <p className="text-[13px] leading-relaxed text-[#5F7382]">
+          Controleer het ingevulde Europees aanrijdingsformulier hieronder.
+        </p>
+      </div>
+      <div className="relative min-h-[420px] overflow-hidden rounded-2xl border border-black/[0.08] bg-[#F7F9FC]">
+        {loading ? (
+          <div className="absolute inset-0 flex items-center justify-center text-[13px] text-[#5F7382]">
+            PDF laden…
+          </div>
+        ) : null}
+        {errorMessage && !loading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-center">
+            <p className="text-[14px] font-medium text-[#B42318]">
+              PDF laden mislukt
+            </p>
+            <p className="text-[12px] text-[#5F7382]">{errorMessage}</p>
+            <Button
+              type="button"
+              onClick={() => {
+                void loadPreview();
+              }}
+              className="h-10 rounded-lg bg-[#2799D7] text-[13px] font-semibold text-white hover:bg-[#1e7bb0]"
+            >
+              Opnieuw proberen
+            </Button>
+          </div>
+        ) : null}
+        {pdfUrl ? (
+          <iframe
+            src={pdfUrl}
+            className="h-[520px] w-full"
+            title="Europees aanrijdingsformulier preview"
+          />
+        ) : null}
+      </div>
+      <div className="mx-auto flex w-full max-w-sm flex-col gap-2">
+        <Button
+          type="button"
+          disabled={!pdfUrl}
+          onClick={download}
+          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white hover:bg-[#1e7bb0] disabled:opacity-50"
+        >
+          Download PDF
+        </Button>
+      </div>
     </div>
   );
 }
