@@ -36,28 +36,46 @@ export function ChatMessageList({
 
   if (messages.length === 0 && !isLoading) return null;
 
+  const groups = groupMessagesByDay(messages);
+
   return (
-    <div className="w-full space-y-2 px-safe pb-3 pt-2">
-      {messages.map((msg) => (
-        <motion.div
-          key={msg.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          {msg.role === "user" ? (
-            <UserBubble
-              content={msg.content}
-              attachments={msg.attachments}
-              timestamp={msg.timestamp}
-            />
-          ) : (
-            <AssistantBubble
-              message={msg}
-              onOpenAccidentWizard={onOpenAccidentWizard}
-            />
-          )}
-        </motion.div>
+    <div className="w-full px-safe pb-3 pt-2">
+      {groups.map((group) => (
+        <section key={group.key} className="relative">
+          <div className="sticky top-0 z-10 flex w-full justify-center py-1.5">
+            <span
+              className="rounded-full border border-white/60 bg-white/70 px-3 py-1 text-[12px] font-medium text-[#5F7382] shadow-[0_1px_2px_rgba(11,20,26,0.08)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/55"
+              role="separator"
+              aria-label={formatDateSeparator(group.date)}
+            >
+              {formatDateSeparator(group.date)}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {group.messages.map((msg) => (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {msg.role === "user" ? (
+                  <UserBubble
+                    content={msg.content}
+                    attachments={msg.attachments}
+                    timestamp={msg.timestamp}
+                  />
+                ) : (
+                  <AssistantBubble
+                    message={msg}
+                    onOpenAccidentWizard={onOpenAccidentWizard}
+                  />
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </section>
       ))}
 
       {isLoading && (
@@ -103,6 +121,64 @@ function formatMessageTime(date: Date): string {
     minute: "2-digit",
   }).format(date);
 }
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+interface DayGroup {
+  key: string;
+  date: Date;
+  messages: ChatMessage[];
+}
+
+function groupMessagesByDay(messages: ChatMessage[]): DayGroup[] {
+  const groups: DayGroup[] = [];
+  for (const msg of messages) {
+    const key = dayKey(msg.timestamp);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.messages.push(msg);
+    } else {
+      groups.push({ key, date: msg.timestamp, messages: [msg] });
+    }
+  }
+  return groups;
+}
+
+function daysBetween(from: Date, to: Date): number {
+  const ms = startOfDay(to).getTime() - startOfDay(from).getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+function formatDateSeparator(date: Date): string {
+  const now = new Date();
+  const diff = daysBetween(date, now);
+
+  if (diff <= 0) return "Vandaag";
+  if (diff === 1) return "Gisteren";
+  if (diff === 2) return "Eergisteren";
+
+  const weekday = new Intl.DateTimeFormat("nl-NL", { weekday: "long" }).format(date);
+
+  const dateParts: Intl.DateTimeFormatOptions =
+    date.getFullYear() === now.getFullYear()
+      ? { day: "2-digit", month: "short" }
+      : { day: "2-digit", month: "short", year: "numeric" };
+
+  const dateStr = new Intl.DateTimeFormat("nl-NL", dateParts)
+    .format(date)
+    .replace(/\.$/, "");
+
+  return `${weekday} ${dateStr}`;
+}
+
 
 function UserAttachmentRow({ a }: { a: ChatAttachment }) {
   return (

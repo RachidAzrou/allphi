@@ -313,6 +313,16 @@ export function OngevalWizard({
     setState((prev) => advanceState(prev, "location_time"));
   }, [stepId, state.role, partyBJoinedAt]);
 
+  // Vangnet: in een 2-toestel-setup is `party_b_optional` altijd onzin —
+  // Partij A hoort door naar plaats/tijd, Partij B naar het eigen formulier.
+  // Voorkomt dat oude, al opgeslagen state iemand hier laat stranden.
+  useEffect(() => {
+    if (stepId !== "party_b_optional") return;
+    if (state.devicesCount !== 2) return;
+    const target = state.role === "B" ? "party_b_form" : "location_time";
+    setState((prev) => advanceState(prev, target));
+  }, [stepId, state.devicesCount, state.role]);
+
   const goNext = useCallback(() => {
     if (!validateStep(stepId, state)) {
       toast.error("Vul de verplichte velden in om verder te gaan.");
@@ -1651,50 +1661,35 @@ export function OngevalWizard({
             QR scannen wordt zo meteen toegevoegd in de volgende stap.
           </div>
         );
-      case "party_b_language":
+      case "party_b_language": {
+        const pickLanguage = (lang: "nl" | "fr" | "en") => {
+          const next = { ...state, partyBLanguage: lang };
+          const target = getNextStepId("party_b_language", next) ?? "party_b_optional";
+          setState(advanceState(next, target));
+        };
         return (
           <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
             <ModeCard
               icon={Languages}
               title="Nederlands"
               description="Partij B gebruikt Nederlands."
-              onClick={() =>
-                setState(
-                  advanceState(
-                    { ...state, partyBLanguage: "nl" as const },
-                    "party_b_optional",
-                  ),
-                )
-              }
+              onClick={() => pickLanguage("nl")}
             />
             <ModeCard
               icon={Languages}
               title="Frans"
               description="Partij B gebruikt Frans."
-              onClick={() =>
-                setState(
-                  advanceState(
-                    { ...state, partyBLanguage: "fr" as const },
-                    "party_b_optional",
-                  ),
-                )
-              }
+              onClick={() => pickLanguage("fr")}
             />
             <ModeCard
               icon={Languages}
               title="Engels"
               description="Partij B gebruikt Engels."
-              onClick={() =>
-                setState(
-                  advanceState(
-                    { ...state, partyBLanguage: "en" as const },
-                    "party_b_optional",
-                  ),
-                )
-              }
+              onClick={() => pickLanguage("en")}
             />
           </div>
         );
+      }
       case "party_b_optional":
         if (state.partiesCount !== 1) {
           return (
