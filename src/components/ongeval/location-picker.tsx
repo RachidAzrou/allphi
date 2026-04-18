@@ -17,6 +17,7 @@ type LocationPickerProps = {
   value: LocationValue;
   onChange: (next: LocationValue) => void;
   lang?: OngevalLang;
+  disabled?: boolean;
 };
 
 type NominatimAddress = {
@@ -78,7 +79,7 @@ function mapAddress(addr: NominatimAddress | undefined): LocationValue {
  * Nominatim verplicht fair-use: 1 req/s, User-Agent/Referrer en debounce. We
  * sturen `accept-language=nl` en respecteren de debounce van 450 ms.
  */
-export function LocationPicker({ value, onChange, lang = "nl" }: LocationPickerProps) {
+export function LocationPicker({ value, onChange, lang = "nl", disabled = false }: LocationPickerProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -162,7 +163,7 @@ export function LocationPicker({ value, onChange, lang = "nl" }: LocationPickerP
       <button
         type="button"
         onClick={useCurrentLocation}
-        disabled={locating}
+        disabled={locating || disabled}
         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#2799D7]/25 bg-white px-3 text-[14px] font-semibold text-[#2799D7] shadow-sm transition-colors hover:bg-[#E8F4FB] disabled:opacity-50"
       >
         <Locate className="size-4" strokeWidth={2} />
@@ -177,6 +178,7 @@ export function LocationPicker({ value, onChange, lang = "nl" }: LocationPickerP
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t(lang, "location.picker.search_placeholder")}
+            disabled={disabled}
             className="h-11 flex-1 border-0 bg-transparent px-0 text-[14px] shadow-none focus-visible:ring-0"
           />
         </div>

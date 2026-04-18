@@ -1136,6 +1136,169 @@ async function loadPayload(
   return { payload: data };
 }
 
+/* ---------------------------------------------------------- builder
+ *
+ * Pure functie die de PDF opbouwt uit een wizard-state. Wordt zowel door de
+ * GET-route hieronder als door de e-mail-server-action (`sendAccidentReport`)
+ * gebruikt zodat we geen tweede HTTP-rondreis nodig hebben.
+ */
+
+export async function buildAccidentPdfBytes(
+  state: AccidentReportState,
+): Promise<Uint8Array> {
+  const templatePath = path.join(
+    process.cwd(),
+    "public",
+    "AANRIJDINGSFORMULIER.pdf",
+  );
+  const templateBytes = await readFile(templatePath);
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  // 1) Voeg een samenvattingsblad vooraan toe (kan meerdere pagina's beslaan
+  //    afhankelijk van hoeveel content de wizard heeft vergaard).
+  const cover = await renderCoverSheet(pdfDoc, font, bold, state);
+
+  // 2) Vul het officiële sjabloon in (verschoven met het aantal cover-pages).
+  const pages = pdfDoc.getPages();
+  const templatePage1 = pages[cover.pageCount];
+
+  // Sectie 1 — datum/uur (op de rij ONDER het label) + plaats.
+  drawText(
+    templatePage1,
+    formatDateForDisplay(state.location.datum),
+    TEMPLATE_PAGE_1.date.x,
+    TEMPLATE_PAGE_1.date.y,
+    { font, size: 9 },
+  );
+  drawText(
+    templatePage1,
+    formatTimeForDisplay(state.location.tijd),
+    TEMPLATE_PAGE_1.time.x,
+    TEMPLATE_PAGE_1.time.y,
+    { font, size: 9 },
+  );
+  const street1 = streetLine({
+    straat: state.location.straat,
+    huisnummer: state.location.huisnummer,
+  });
+  const cityLine = [
+    safe(state.location.postcode),
+    safe(state.location.stad),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  drawText(
+    templatePage1,
+    truncate(street1, 32),
+    TEMPLATE_PAGE_1.placeLine1.x,
+    TEMPLATE_PAGE_1.placeLine1.y,
+    { font, size: 9 },
+  );
+  drawText(
+    templatePage1,
+    truncate(cityLine, 44),
+    TEMPLATE_PAGE_1.placeLine2.x,
+    TEMPLATE_PAGE_1.placeLine2.y,
+    { font, size: 9 },
+  );
+  drawText(
+    templatePage1,
+    safe(state.location.land),
+    TEMPLATE_PAGE_1.country.x,
+    TEMPLATE_PAGE_1.country.y,
+    { font, size: 9 },
+  );
+
+  // Sectie 2 — Gewonden (kruisje bij neen of ja).
+  const injuryPos =
+    state.gewonden === true
+      ? TEMPLATE_PAGE_1.injuriesYes
+      : state.gewonden === false
+        ? TEMPLATE_PAGE_1.injuriesNo
+        : null;
+  if (injuryPos) drawCheckbox(templatePage1, injuryPos.x, injuryPos.y, 5.71);
+
+  // Sectie 3/4 — materiële schade (we kruisen hetzelfde antwoord aan in beide
+  // kolommen omdat de wizard slechts één gedeelde vraag stelt).
+  if (state.materieleSchadeAnders !== null) {
+    const isYes = state.materieleSchadeAnders;
+    const v = isYes
+      ? TEMPLATE_PAGE_1.damageOtherVehiclesYes
+      : TEMPLATE_PAGE_1.damageOtherVehiclesNo;
+    const o = isYes
+      ? TEMPLATE_PAGE_1.damageOtherObjectsYes
+      : TEMPLATE_PAGE_1.damageOtherObjectsNo;
+    drawCheckbox(templatePage1, v.x, v.y, 5.71);
+    drawCheckbox(templatePage1, o.x, o.y, 5.71);
+  }
+
+  // Sectie 5 — getuigen (max. 3 regels).
+  const witnessText = safe(state.getuigen);
+  const w1 = wrapText(witnessText, 95, 1);
+  const remainder = witnessText.slice((w1[0] ?? "").length).trim();
+  const w23 = wrapText(remainder, 140, 2);
+  const allWitnessLines = [...w1, ...w23];
+  for (let i = 0; i < allWitnessLines.length; i++) {
+    const slot = TEMPLATE_PAGE_1.witnessLines[i];
+    drawText(templatePage1, allWitnessLines[i], slot.x, slot.y, {
+      font,
+      size: 8,
+    });
+  }
+
+  // Secties 6-9 per partij.
+  fillPartyBlock(templatePage1, font, bold, state.partyA, COL_A);
+  fillPartyBlock(templatePage1, font, bold, state.partyB, COL_B);
+
+  // Sectie 12 — 17 vakjes toedracht.
+  drawCheckboxes(templatePage1, bold, state);
+
+  // Sectie 14 — opmerkingen per partij (gedeelde notitie links + rechts).
+  if (state.circumstancesNotes?.trim()) {
+    const noteLines = wrapText(state.circumstancesNotes, 65, 3);
+    for (let i = 0; i < noteLines.length; i++) {
+      const slotA = COL_A.notes.lines[i];
+      const slotB = COL_B.notes.lines[i];
+      if (slotA) {
+        drawText(templatePage1, noteLines[i], slotA.x, slotA.y, {
+          font,
+          size: 8,
+        });
+      }
+      if (slotB) {
+        drawText(templatePage1, noteLines[i], slotB.x, slotB.y, {
+          font,
+          size: 8,
+        });
+      }
+    }
+  }
+
+  // Sectie 15 — handtekeningen.
+  await embedSignaturePng(
+    pdfDoc,
+    templatePage1,
+    state.signaturePartyA,
+    COL_A.signature.x,
+    COL_A.signature.y,
+    COL_A.signature.w,
+    COL_A.signature.h,
+  );
+  await embedSignaturePng(
+    pdfDoc,
+    templatePage1,
+    state.signaturePartyB,
+    COL_B.signature.x,
+    COL_B.signature.y,
+    COL_B.signature.w,
+    COL_B.signature.h,
+  );
+
+  return await pdfDoc.save();
+}
+
 /* ---------------------------------------------------------- GET */
 
 export async function GET(
@@ -1154,171 +1317,7 @@ export async function GET(
     }
 
     const state = mergePayloadIntoState(payload);
-
-    const templatePath = path.join(
-      process.cwd(),
-      "public",
-      "AANRIJDINGSFORMULIER.pdf",
-    );
-    const templateBytes = await readFile(templatePath);
-    const pdfDoc = await PDFDocument.load(templateBytes);
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-    // 1) Voeg een samenvattingsblad vooraan toe (kan meerdere pagina's beslaan
-    //    afhankelijk van hoeveel content de wizard heeft vergaard).
-    const cover = await renderCoverSheet(pdfDoc, font, bold, state);
-
-    // 2) Vul het officiële sjabloon in (verschoven met het aantal cover-pages).
-    const pages = pdfDoc.getPages();
-    const templatePage1 = pages[cover.pageCount];
-
-    // Sectie 1 — datum/uur (op de rij ONDER het label) + plaats.
-    drawText(
-      templatePage1,
-      formatDateForDisplay(state.location.datum),
-      TEMPLATE_PAGE_1.date.x,
-      TEMPLATE_PAGE_1.date.y,
-      { font, size: 9 },
-    );
-    drawText(
-      templatePage1,
-      formatTimeForDisplay(state.location.tijd),
-      TEMPLATE_PAGE_1.time.x,
-      TEMPLATE_PAGE_1.time.y,
-      { font, size: 9 },
-    );
-    // Plaats: regel 1 = straat (kort, 78pt), regel 2 = postcode + stad (108pt).
-    const street1 = streetLine({
-      straat: state.location.straat,
-      huisnummer: state.location.huisnummer,
-    });
-    const cityLine = [
-      safe(state.location.postcode),
-      safe(state.location.stad),
-    ]
-      .filter(Boolean)
-      .join(" ");
-    drawText(
-      templatePage1,
-      truncate(street1, 32),
-      TEMPLATE_PAGE_1.placeLine1.x,
-      TEMPLATE_PAGE_1.placeLine1.y,
-      { font, size: 9 },
-    );
-    drawText(
-      templatePage1,
-      truncate(cityLine, 44),
-      TEMPLATE_PAGE_1.placeLine2.x,
-      TEMPLATE_PAGE_1.placeLine2.y,
-      { font, size: 9 },
-    );
-    drawText(
-      templatePage1,
-      safe(state.location.land),
-      TEMPLATE_PAGE_1.country.x,
-      TEMPLATE_PAGE_1.country.y,
-      { font, size: 9 },
-    );
-
-    // Sectie 2 — Gewonden (kruisje bij neen of ja).
-    const injuryPos =
-      state.gewonden === true
-        ? TEMPLATE_PAGE_1.injuriesYes
-        : state.gewonden === false
-          ? TEMPLATE_PAGE_1.injuriesNo
-          : null;
-    if (injuryPos) drawCheckbox(templatePage1, injuryPos.x, injuryPos.y, 5.71);
-
-    // Sectie 3/4 — materiële schade. Het officiële sjabloon stelt twee aparte
-    // vragen ("andere voertuigen dan A en B" en "andere objecten dan
-    // voertuigen"). De wizard heeft slechts één antwoord — we kruisen dat
-    // antwoord in beide kolommen aan.
-    if (state.materieleSchadeAnders !== null) {
-      const isYes = state.materieleSchadeAnders;
-      const v = isYes
-        ? TEMPLATE_PAGE_1.damageOtherVehiclesYes
-        : TEMPLATE_PAGE_1.damageOtherVehiclesNo;
-      const o = isYes
-        ? TEMPLATE_PAGE_1.damageOtherObjectsYes
-        : TEMPLATE_PAGE_1.damageOtherObjectsNo;
-      drawCheckbox(templatePage1, v.x, v.y, 5.71);
-      drawCheckbox(templatePage1, o.x, o.y, 5.71);
-    }
-
-    // Sectie 5 — getuigen (max. 3 regels). Eerste regel is korter (deelt rij
-    // met "Getuigen:" label) — daarom 3 aparte posities. Eerste regel max ~95
-    // chars (237pt), de andere ~140 chars (350pt). We wrappen veiligheidshalve
-    // op de smalste limiet voor regel 1, en hertekenen vanaf daar.
-    const witnessText = safe(state.getuigen);
-    const w1 = wrapText(witnessText, 95, 1);
-    const remainder = witnessText.slice((w1[0] ?? "").length).trim();
-    const w23 = wrapText(remainder, 140, 2);
-    const allWitnessLines = [...w1, ...w23];
-    for (let i = 0; i < allWitnessLines.length; i++) {
-      const slot = TEMPLATE_PAGE_1.witnessLines[i];
-      drawText(templatePage1, allWitnessLines[i], slot.x, slot.y, {
-        font,
-        size: 8,
-      });
-    }
-
-    // Secties 6-9 per partij.
-    fillPartyBlock(templatePage1, font, bold, state.partyA, COL_A);
-    fillPartyBlock(templatePage1, font, bold, state.partyB, COL_B);
-
-    // Sectie 10 (raakpunt) wordt op het officiële sjabloon NIET overgetekend:
-    // het sjabloon bevat al schematische voertuigen waar de gebruiker zelf de
-    // pijl tekent. Onze raakpuntdata wordt enkel op het samenvattingsblad
-    // afgebeeld (zie renderCoverSheet).
-
-    // Sectie 12 — 17 vakjes toedracht.
-    drawCheckboxes(templatePage1, bold, state);
-
-    // Sectie 14 — opmerkingen per partij (we schrijven dezelfde notities links
-    // én rechts omdat de wizard één gedeelde circumstancesNotes kent).
-    if (state.circumstancesNotes?.trim()) {
-      // 3 regels van ~168pt breed bij fontsize 8 ≈ 65 chars per regel.
-      const noteLines = wrapText(state.circumstancesNotes, 65, 3);
-      for (let i = 0; i < noteLines.length; i++) {
-        const slotA = COL_A.notes.lines[i];
-        const slotB = COL_B.notes.lines[i];
-        if (slotA) {
-          drawText(templatePage1, noteLines[i], slotA.x, slotA.y, {
-            font,
-            size: 8,
-          });
-        }
-        if (slotB) {
-          drawText(templatePage1, noteLines[i], slotB.x, slotB.y, {
-            font,
-            size: 8,
-          });
-        }
-      }
-    }
-
-    // Sectie 15 — handtekeningen.
-    await embedSignaturePng(
-      pdfDoc,
-      templatePage1,
-      state.signaturePartyA,
-      COL_A.signature.x,
-      COL_A.signature.y,
-      COL_A.signature.w,
-      COL_A.signature.h,
-    );
-    await embedSignaturePng(
-      pdfDoc,
-      templatePage1,
-      state.signaturePartyB,
-      COL_B.signature.x,
-      COL_B.signature.y,
-      COL_B.signature.w,
-      COL_B.signature.h,
-    );
-
-    const pdfBytes = await pdfDoc.save();
+    const pdfBytes = await buildAccidentPdfBytes(state);
 
     return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
@@ -1337,3 +1336,4 @@ export async function GET(
     );
   }
 }
+

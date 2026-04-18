@@ -17,6 +17,8 @@ type LangDict = Record<OngevalLang, Dict>;
 // Step titles — worden in de header getoond via WizardShell.
 const STEP_TITLES: LangDict = {
   nl: {
+    submission_mode: "Hoe wil je aangifte doen?",
+    scan_capture: "Papieren formulier scannen",
     driver_select: "Bestuurder",
     driver_employee_form: "Bestuurder",
     driver_other_form: "Bestuurder",
@@ -58,6 +60,8 @@ const STEP_TITLES: LangDict = {
     complete: "Voltooiing",
   },
   fr: {
+    submission_mode: "Comment souhaitez-vous déclarer ?",
+    scan_capture: "Scanner le formulaire papier",
     driver_select: "Conducteur",
     driver_employee_form: "Conducteur",
     driver_other_form: "Conducteur",
@@ -99,6 +103,8 @@ const STEP_TITLES: LangDict = {
     complete: "Terminé",
   },
   en: {
+    submission_mode: "How do you want to file the report?",
+    scan_capture: "Scan paper form",
     driver_select: "Driver",
     driver_employee_form: "Driver",
     driver_other_form: "Driver",
@@ -369,6 +375,41 @@ const UI_STRINGS: LangDict = {
     "location.picker.geocode_failed": "Adres ophalen mislukt. Vul handmatig in.",
     "location.picker.locate_failed": "Locatie bepalen mislukt.",
 
+    // location_time approval
+    "location.approval.a.intro":
+      "Vul plaats en tijd van het ongeval in. Partij B moet deze gegevens daarna goedkeuren voor je verder kunt.",
+    "location.approval.a.send": "Sturen ter goedkeuring aan partij B",
+    "location.approval.a.send_disabled": "Vul eerst alle velden in.",
+    "location.approval.a.pending_title": "Wachten op goedkeuring partij B",
+    "location.approval.a.pending_body":
+      "Partij B kijkt nu plaats en tijd na. Zodra B akkoord gaat, kun je verder.",
+    "location.approval.a.approved_title": "Goedgekeurd door partij B",
+    "location.approval.a.approved_body":
+      "Plaats en tijd zijn bevestigd. Je kunt verder met de volgende stap.",
+    "location.approval.a.rejected_title": "Partij B is niet akkoord",
+    "location.approval.a.rejected_body": "Pas de gegevens aan en stuur opnieuw.",
+    "location.approval.a.rejected_note": "Opmerking van partij B:",
+    "location.approval.a.retract": "Aanpassen",
+    "location.approval.a.retract_confirm":
+      "Plaats en tijd opnieuw kunnen aanpassen? De goedkeuring vervalt en partij B moet opnieuw bevestigen.",
+    "location.approval.b.title": "Bevestig plaats en tijd",
+    "location.approval.b.intro":
+      "Partij A heeft plaats en tijd ingevuld. Bekijk de gegevens en geef aan of ze kloppen.",
+    "location.approval.b.waiting":
+      "Partij A vult plaats en tijd nog in. Je krijgt hier een bericht zodra A klaar is.",
+    "location.approval.b.approve": "Akkoord",
+    "location.approval.b.reject": "Niet akkoord",
+    "location.approval.b.note_label": "Opmerking voor partij A (optioneel)",
+    "location.approval.b.note_placeholder": "Bijv. 'datum klopt niet, was 16 april'",
+    "location.approval.b.send_rejection": "Stuur weigering",
+    "location.approval.b.cancel": "Annuleren",
+    "location.approval.b.approved_title": "Bedankt, je akkoord is genoteerd",
+    "location.approval.b.approved_body":
+      "Partij A kan nu verder met de aangifte.",
+    "location.approval.b.rejected_title": "Je weigering is verstuurd",
+    "location.approval.b.rejected_body":
+      "Partij A past de gegevens aan en zal opnieuw vragen om bevestiging.",
+
     // injuries_material
     "injuries.question": "Waren er gewonden bij het ongeval?",
     "material.question": "Was er andere materiële schade dan aan de voertuigen?",
@@ -465,6 +506,74 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "PDF laden mislukt",
     "complete.retry": "Opnieuw proberen",
     "complete.download": "Download PDF",
+
+    "send.title": "Verzenden naar fleetmanager",
+    "send.intro":
+      "Verstuur de aangifte als PDF-bijlage naar het centrale schade-adres van het bedrijf. Je krijgt zelf een kopie via CC.",
+    "send.button": "Verstuur naar fleetmanager",
+    "send.button_retry": "Opnieuw versturen",
+    "send.sending": "Bezig met verzenden…",
+    "send.success_title": "Verstuurd",
+    "send.success_to": "Verzonden naar:",
+    "send.success_cc": "Kopie (CC):",
+    "send.success_simulated":
+      "Test-modus: e-mail werd niet daadwerkelijk verstuurd (RESEND_API_KEY ontbreekt).",
+    "send.failure_title": "Verzenden mislukt",
+    "send.error.no_recipient":
+      "Er is nog geen centraal schade-adres ingesteld voor jouw bedrijf. Vraag de beheerder om dit toe te voegen in de bedrijfsinstellingen.",
+    "send.error.incomplete":
+      "De aangifte mist nog een handtekening. Vul eerst alle stappen in.",
+    "send.error.forbidden": "Enkel partij A kan de aangifte verzenden.",
+    "send.error.generic": "Er ging iets mis. Probeer opnieuw.",
+    "send.b.waiting":
+      "Partij A verstuurt de aangifte naar de fleetmanager. Je krijgt geen kopie via dit toestel.",
+
+    "submission_mode.intro":
+      "Je kan de aangifte stap-voor-stap invullen via de wizard, óf het papieren Europees aanrijdingsformulier scannen en doorsturen.",
+    "submission_mode.wizard_title": "Volg de wizard",
+    "submission_mode.wizard_desc":
+      "We loodsen je stap voor stap doorheen de aangifte. Aanbevolen wanneer je niets op papier hebt.",
+    "submission_mode.scan_title": "Papieren formulier scannen",
+    "submission_mode.scan_desc":
+      "Maak foto's van het ingevulde papieren formulier en stuur de PDF rechtstreeks naar je fleetmanager.",
+
+    "scan.pages_title": "Pagina's van het formulier",
+    "scan.pages_help":
+      "Maak een duidelijke foto van élke pagina (recto + verso indien ingevuld). Vermijd schaduw en zorg dat de tekst leesbaar is.",
+    "scan.button_camera": "Foto maken",
+    "scan.button_gallery": "Uit galerij",
+    "scan.empty":
+      "Nog geen pagina's. Voeg minstens één foto toe om verder te kunnen.",
+    "scan.page_label": "Pagina",
+    "scan.remove_page": "Pagina verwijderen",
+    "scan.metadata_title": "Basisgegevens",
+    "scan.metadata_help":
+      "Deze info gebruiken we voor het onderwerp van de mail naar je fleetmanager.",
+    "scan.field_datum": "Datum van het ongeval",
+    "scan.field_stad": "Plaats (stad)",
+    "scan.field_nummerplaat": "Jouw nummerplaat",
+    "scan.field_notitie": "Notitie voor de fleetmanager (optioneel)",
+    "scan.field_notitie_placeholder": "Bv. politie ter plaatse, getuigen, …",
+    "scan.upload": "Upload en ga door",
+    "scan.reupload": "Pagina's vervangen en opnieuw uploaden",
+    "scan.uploading": "Uploaden…",
+    "scan.upload_success": "Scan opgeslagen.",
+    "scan.already_uploaded":
+      "De scan is opgeslagen. Voeg pagina's toe om opnieuw te uploaden.",
+    "scan.complete_title": "Klaar om te verzenden",
+    "scan.complete_subtitle":
+      "Hieronder zie je de gegenereerde PDF. Verzend naar je fleetmanager.",
+    "scan.preview_error":
+      "Voorbeeld kon niet geladen worden. Probeer opnieuw.",
+    "scan.error.no_pages": "Voeg eerst minstens één pagina toe.",
+    "scan.error.too_many":
+      "Maximum bereikt. Verwijder eerst een pagina om er nog toe te voegen.",
+    "scan.error.bad_type": "Enkel JPG of PNG zijn toegestaan.",
+    "scan.error.too_large":
+      "Foto te groot (max 12 MB). Maak een kleinere foto.",
+    "scan.error.upload_failed":
+      "Upload mislukt. Controleer je internetverbinding en probeer opnieuw.",
+    "common.retry": "Opnieuw",
   },
   fr: {
     "common.next": "Suivant",
@@ -518,6 +627,40 @@ const UI_STRINGS: LangDict = {
     "location.picker.geocode_failed":
       "Impossible de récupérer l'adresse. Veuillez la saisir manuellement.",
     "location.picker.locate_failed": "Impossible de déterminer la position.",
+
+    "location.approval.a.intro":
+      "Saisissez le lieu et l'heure de l'accident. La partie B devra les confirmer avant que vous puissiez continuer.",
+    "location.approval.a.send": "Envoyer pour validation à la partie B",
+    "location.approval.a.send_disabled": "Remplissez d'abord tous les champs.",
+    "location.approval.a.pending_title": "En attente de la confirmation de la partie B",
+    "location.approval.a.pending_body":
+      "La partie B vérifie le lieu et l'heure. Dès qu'elle valide, vous pourrez continuer.",
+    "location.approval.a.approved_title": "Validé par la partie B",
+    "location.approval.a.approved_body":
+      "Le lieu et l'heure sont confirmés. Vous pouvez passer à l'étape suivante.",
+    "location.approval.a.rejected_title": "La partie B n'est pas d'accord",
+    "location.approval.a.rejected_body": "Modifiez les données et renvoyez.",
+    "location.approval.a.rejected_note": "Remarque de la partie B :",
+    "location.approval.a.retract": "Modifier",
+    "location.approval.a.retract_confirm":
+      "Modifier à nouveau le lieu et l'heure ? La validation sera annulée et la partie B devra reconfirmer.",
+    "location.approval.b.title": "Confirmez le lieu et l'heure",
+    "location.approval.b.intro":
+      "La partie A a saisi le lieu et l'heure. Vérifiez les informations et indiquez si elles sont correctes.",
+    "location.approval.b.waiting":
+      "La partie A est en train de saisir le lieu et l'heure. Vous serez prévenu dès qu'elle aura terminé.",
+    "location.approval.b.approve": "D'accord",
+    "location.approval.b.reject": "Pas d'accord",
+    "location.approval.b.note_label": "Remarque pour la partie A (facultatif)",
+    "location.approval.b.note_placeholder": "Ex. « la date n'est pas correcte, c'était le 16 avril »",
+    "location.approval.b.send_rejection": "Envoyer le refus",
+    "location.approval.b.cancel": "Annuler",
+    "location.approval.b.approved_title": "Merci, votre accord est enregistré",
+    "location.approval.b.approved_body":
+      "La partie A peut continuer la déclaration.",
+    "location.approval.b.rejected_title": "Votre refus a été envoyé",
+    "location.approval.b.rejected_body":
+      "La partie A va modifier les données et demandera à nouveau confirmation.",
 
     "injuries.question": "Y a-t-il eu des blessés dans l'accident ?",
     "material.question":
@@ -607,6 +750,74 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "Échec du chargement du PDF",
     "complete.retry": "Réessayer",
     "complete.download": "Télécharger le PDF",
+
+    "send.title": "Envoyer au fleet manager",
+    "send.intro":
+      "Envoyez la déclaration en PIèce jointe PDF à l'adresse centrale de gestion des sinistres. Vous recevrez vous-même une copie en CC.",
+    "send.button": "Envoyer au fleet manager",
+    "send.button_retry": "Renvoyer",
+    "send.sending": "Envoi en cours…",
+    "send.success_title": "Envoyé",
+    "send.success_to": "Envoyé à :",
+    "send.success_cc": "Copie (CC) :",
+    "send.success_simulated":
+      "Mode test : l'e-mail n'a pas été réellement envoyé (RESEND_API_KEY manquant).",
+    "send.failure_title": "Échec de l'envoi",
+    "send.error.no_recipient":
+      "Aucune adresse centrale de gestion des sinistres n'est configurée pour votre entreprise. Demandez à l'administrateur de l'ajouter dans les paramètres.",
+    "send.error.incomplete":
+      "La déclaration n'a pas encore été signée. Complétez d'abord toutes les étapes.",
+    "send.error.forbidden": "Seule la partie A peut envoyer la déclaration.",
+    "send.error.generic": "Une erreur s'est produite. Réessayez.",
+    "send.b.waiting":
+      "La partie A envoie la déclaration au fleet manager. Vous ne recevrez pas de copie sur cet appareil.",
+
+    "submission_mode.intro":
+      "Vous pouvez remplir la déclaration étape par étape via le wizard, ou scanner le constat amiable papier et l'envoyer directement.",
+    "submission_mode.wizard_title": "Suivre le wizard",
+    "submission_mode.wizard_desc":
+      "Nous vous guidons étape par étape. Recommandé si vous n'avez rien sur papier.",
+    "submission_mode.scan_title": "Scanner le formulaire papier",
+    "submission_mode.scan_desc":
+      "Photographiez le constat papier rempli et envoyez le PDF directement à votre fleet manager.",
+
+    "scan.pages_title": "Pages du formulaire",
+    "scan.pages_help":
+      "Prenez une photo nette de chaque page (recto + verso si rempli). Évitez les ombres et veillez à la lisibilité.",
+    "scan.button_camera": "Prendre une photo",
+    "scan.button_gallery": "Depuis la galerie",
+    "scan.empty":
+      "Aucune page pour l'instant. Ajoutez au moins une photo pour continuer.",
+    "scan.page_label": "Page",
+    "scan.remove_page": "Supprimer la page",
+    "scan.metadata_title": "Informations de base",
+    "scan.metadata_help":
+      "Ces infos servent pour l'objet de l'e-mail au fleet manager.",
+    "scan.field_datum": "Date de l'accident",
+    "scan.field_stad": "Lieu (ville)",
+    "scan.field_nummerplaat": "Votre plaque d'immatriculation",
+    "scan.field_notitie": "Note pour le fleet manager (optionnel)",
+    "scan.field_notitie_placeholder": "Ex. police sur place, témoins, …",
+    "scan.upload": "Téléverser et continuer",
+    "scan.reupload": "Remplacer les pages et téléverser à nouveau",
+    "scan.uploading": "Téléversement…",
+    "scan.upload_success": "Scan enregistré.",
+    "scan.already_uploaded":
+      "Le scan est enregistré. Ajoutez des pages pour téléverser à nouveau.",
+    "scan.complete_title": "Prêt à envoyer",
+    "scan.complete_subtitle":
+      "Voici le PDF généré. Envoyez-le à votre fleet manager.",
+    "scan.preview_error":
+      "L'aperçu n'a pas pu être chargé. Réessayez.",
+    "scan.error.no_pages": "Ajoutez d'abord au moins une page.",
+    "scan.error.too_many":
+      "Maximum atteint. Supprimez d'abord une page pour en ajouter.",
+    "scan.error.bad_type": "Seuls les formats JPG et PNG sont acceptés.",
+    "scan.error.too_large":
+      "Photo trop grande (max 12 Mo). Prenez une photo plus petite.",
+    "scan.error.upload_failed":
+      "Téléversement échoué. Vérifiez votre connexion et réessayez.",
+    "common.retry": "Réessayer",
   },
   en: {
     "common.next": "Next",
@@ -660,6 +871,40 @@ const UI_STRINGS: LangDict = {
     "location.picker.geocode_failed":
       "Could not fetch address. Please enter it manually.",
     "location.picker.locate_failed": "Could not determine location.",
+
+    "location.approval.a.intro":
+      "Enter the place and time of the accident. Party B has to confirm these before you can continue.",
+    "location.approval.a.send": "Send to party B for confirmation",
+    "location.approval.a.send_disabled": "Fill in all fields first.",
+    "location.approval.a.pending_title": "Waiting for party B's confirmation",
+    "location.approval.a.pending_body":
+      "Party B is reviewing the place and time. You can continue as soon as B confirms.",
+    "location.approval.a.approved_title": "Confirmed by party B",
+    "location.approval.a.approved_body":
+      "Place and time are confirmed. You can move on to the next step.",
+    "location.approval.a.rejected_title": "Party B disagrees",
+    "location.approval.a.rejected_body": "Adjust the details and send again.",
+    "location.approval.a.rejected_note": "Note from party B:",
+    "location.approval.a.retract": "Edit",
+    "location.approval.a.retract_confirm":
+      "Edit place and time again? The confirmation will be revoked and party B will need to confirm again.",
+    "location.approval.b.title": "Confirm place and time",
+    "location.approval.b.intro":
+      "Party A entered the place and time. Review the information and indicate whether it is correct.",
+    "location.approval.b.waiting":
+      "Party A is still entering the place and time. You'll get a notice once A is done.",
+    "location.approval.b.approve": "Confirm",
+    "location.approval.b.reject": "Disagree",
+    "location.approval.b.note_label": "Note for party A (optional)",
+    "location.approval.b.note_placeholder": "E.g. 'date is wrong, it was April 16'",
+    "location.approval.b.send_rejection": "Send disagreement",
+    "location.approval.b.cancel": "Cancel",
+    "location.approval.b.approved_title": "Thanks, your confirmation is recorded",
+    "location.approval.b.approved_body":
+      "Party A can continue the report.",
+    "location.approval.b.rejected_title": "Your disagreement has been sent",
+    "location.approval.b.rejected_body":
+      "Party A will adjust the details and ask again for confirmation.",
 
     "injuries.question": "Were there any injuries in the accident?",
     "material.question":
@@ -747,6 +992,72 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "PDF failed to load",
     "complete.retry": "Try again",
     "complete.download": "Download PDF",
+
+    "send.title": "Send to fleet manager",
+    "send.intro":
+      "Send the report as PDF attachment to the company's central claims address. You'll get a copy via CC.",
+    "send.button": "Send to fleet manager",
+    "send.button_retry": "Send again",
+    "send.sending": "Sending…",
+    "send.success_title": "Sent",
+    "send.success_to": "Sent to:",
+    "send.success_cc": "Copy (CC):",
+    "send.success_simulated":
+      "Test mode: e-mail wasn't actually sent (RESEND_API_KEY missing).",
+    "send.failure_title": "Sending failed",
+    "send.error.no_recipient":
+      "No central claims address is configured for your company yet. Ask the admin to add one in the company settings.",
+    "send.error.incomplete":
+      "The report is not signed yet. Please complete all steps first.",
+    "send.error.forbidden": "Only party A can send the report.",
+    "send.error.generic": "Something went wrong. Try again.",
+    "send.b.waiting":
+      "Party A is sending the report to the fleet manager. You won't get a copy on this device.",
+
+    "submission_mode.intro":
+      "You can complete the report step by step using the wizard, or scan the paper European accident statement and forward it.",
+    "submission_mode.wizard_title": "Use the wizard",
+    "submission_mode.wizard_desc":
+      "We'll guide you through every step. Recommended when you have nothing on paper.",
+    "submission_mode.scan_title": "Scan paper form",
+    "submission_mode.scan_desc":
+      "Photograph the filled-in paper form and send the PDF straight to your fleet manager.",
+
+    "scan.pages_title": "Form pages",
+    "scan.pages_help":
+      "Take a clear photo of every page (front + back if filled). Avoid shadows and keep the text readable.",
+    "scan.button_camera": "Take a photo",
+    "scan.button_gallery": "From gallery",
+    "scan.empty": "No pages yet. Add at least one photo to continue.",
+    "scan.page_label": "Page",
+    "scan.remove_page": "Remove page",
+    "scan.metadata_title": "Basic info",
+    "scan.metadata_help":
+      "We use this info for the subject of the e-mail to your fleet manager.",
+    "scan.field_datum": "Accident date",
+    "scan.field_stad": "Place (city)",
+    "scan.field_nummerplaat": "Your number plate",
+    "scan.field_notitie": "Note for the fleet manager (optional)",
+    "scan.field_notitie_placeholder": "E.g. police on site, witnesses, …",
+    "scan.upload": "Upload and continue",
+    "scan.reupload": "Replace pages and upload again",
+    "scan.uploading": "Uploading…",
+    "scan.upload_success": "Scan saved.",
+    "scan.already_uploaded":
+      "The scan is saved. Add pages to upload again.",
+    "scan.complete_title": "Ready to send",
+    "scan.complete_subtitle":
+      "Below is the generated PDF. Send it to your fleet manager.",
+    "scan.preview_error": "Preview could not be loaded. Try again.",
+    "scan.error.no_pages": "Add at least one page first.",
+    "scan.error.too_many":
+      "Maximum reached. Remove a page first to add another.",
+    "scan.error.bad_type": "Only JPG or PNG are allowed.",
+    "scan.error.too_large":
+      "Photo too large (max 12 MB). Take a smaller photo.",
+    "scan.error.upload_failed":
+      "Upload failed. Check your connection and try again.",
+    "common.retry": "Retry",
   },
 };
 

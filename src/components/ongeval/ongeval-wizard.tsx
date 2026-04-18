@@ -8,16 +8,22 @@ import {
   BadgeCheck,
   Building2,
   Car,
+  Check,
   ChevronRight,
+  Clock,
   Download,
   DoorOpen,
   FilePenLine,
+  FileText,
   GitBranch,
+  ScanLine,
   Info,
   Languages,
   ParkingCircle,
+  Pencil,
   QrCode,
   RefreshCw,
+  Send,
   ShieldAlert,
   Smartphone,
   SmartphoneNfc,
@@ -25,6 +31,7 @@ import {
   Truck,
   UserCircle,
   Users,
+  X,
 } from "lucide-react";
 import { FcTwoSmartphones } from "react-icons/fc";
 import { toast } from "sonner";
@@ -36,15 +43,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { WizardFooterButton, WizardShell } from "@/components/ongeval/wizard-shell";
 import { ImpactDiagram } from "@/components/ongeval/impact-diagram";
 import { LocationPicker } from "@/components/ongeval/location-picker";
+import { ScanCaptureStep, ScanPdfPreview } from "@/components/ongeval/scan-flow";
 import { SignaturePad } from "@/components/ongeval/signature-pad";
 import { STEP_BANNERS } from "@/components/ongeval/step-banners";
 import {
   advanceState,
+  computeLocationHash,
   getNextStepId,
   getNextAfterOverviewSkip,
   getPreviousStepId,
   mergePayloadIntoState,
   popHistory,
+  requiresLocationApproval,
   validateStep,
 } from "@/lib/ongeval/engine";
 import { toIsoDate } from "@/lib/ongeval/date-utils";
@@ -1047,6 +1057,55 @@ export function OngevalWizard({
 
   function renderBody() {
     switch (stepId) {
+      case "submission_mode":
+        return (
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
+            <p className="px-1 text-[13px] leading-snug text-[#5F7382]">
+              {t(lang, "submission_mode.intro")}
+            </p>
+            <ModeCard
+              icon={FileText}
+              title={t(lang, "submission_mode.wizard_title")}
+              description={t(lang, "submission_mode.wizard_desc")}
+              onClick={() => {
+                const next: AccidentReportState = {
+                  ...state,
+                  submissionMode: "wizard",
+                };
+                setState(advanceState(next, "driver_select"));
+              }}
+            />
+            <ModeCard
+              icon={ScanLine}
+              title={t(lang, "submission_mode.scan_title")}
+              description={t(lang, "submission_mode.scan_desc")}
+              onClick={() => {
+                const next: AccidentReportState = {
+                  ...state,
+                  submissionMode: "scan",
+                };
+                setState(advanceState(next, "scan_capture"));
+              }}
+            />
+          </div>
+        );
+      case "scan_capture":
+        return (
+          <ScanCaptureStep
+            reportId={reportId}
+            state={state}
+            lang={lang}
+            onUpdateState={updateState}
+            onUploaded={(scan) => {
+              setState((prev) =>
+                advanceState(
+                  { ...prev, scanSubmission: scan, submissionMode: "scan" },
+                  "complete",
+                ),
+              );
+            }}
+          />
+        );
       case "driver_select":
         return (
           <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
@@ -1944,11 +2003,63 @@ export function OngevalWizard({
         );
       case "party_b_form":
         return renderPartyBForm();
-      case "location_time":
+      case "location_time": {
+        const approval = state.locationApproval;
+        const needsApproval = requiresLocationApproval(state);
+        const isPartyB = needsApproval && state.role === "B";
+        const editingLocked =
+          needsApproval && (approval.status === "pending" || approval.status === "approved");
+        const fieldsFilled =
+          state.location.straat.trim().length > 0 &&
+          state.location.huisnummer.trim().length > 0 &&
+          state.location.postcode.trim().length > 0 &&
+          state.location.stad.trim().length > 0 &&
+          state.location.land.trim().length > 0 &&
+          state.location.datum.trim().length > 0 &&
+          state.location.tijd.trim().length > 0;
+
+        if (isPartyB) {
+          return (
+            <PartyBLocationApprovalView
+              lang={lang}
+              location={state.location}
+              approval={approval}
+              onApprove={() => {
+                updateState({
+                  locationApproval: {
+                    status: "approved",
+                    approvedAt: new Date().toISOString(),
+                    rejectedAt: null,
+                    rejectionNote: "",
+                    approvedValuesHash: computeLocationHash(state.location),
+                  },
+                });
+              }}
+              onReject={(note) => {
+                updateState({
+                  locationApproval: {
+                    status: "rejected",
+                    approvedAt: null,
+                    rejectedAt: new Date().toISOString(),
+                    rejectionNote: note,
+                    approvedValuesHash: null,
+                  },
+                });
+              }}
+            />
+          );
+        }
+
         return (
           <div className="flex flex-col gap-3 px-4 py-4">
+            {needsApproval && approval.status === "idle" ? (
+              <p className="rounded-xl border border-[#2799D7]/20 bg-[#E8F4FB] px-3 py-2 text-[12.5px] leading-snug text-[#163247]">
+                {t(lang, "location.approval.a.intro")}
+              </p>
+            ) : null}
             <LocationPicker
               lang={lang}
+              disabled={editingLocked}
               value={{
                 straat: state.location.straat,
                 huisnummer: state.location.huisnummer,
@@ -1971,6 +2082,7 @@ export function OngevalWizard({
             />
             <Field label={t(lang, "field.street")}>
               <Input
+                disabled={editingLocked}
                 value={state.location.straat}
                 onChange={(e) =>
                   updateState({
@@ -1981,6 +2093,7 @@ export function OngevalWizard({
             </Field>
             <Field label={t(lang, "field.housenumber")}>
               <Input
+                disabled={editingLocked}
                 value={state.location.huisnummer}
                 onChange={(e) =>
                   updateState({
@@ -1992,6 +2105,7 @@ export function OngevalWizard({
             <div className="grid grid-cols-2 gap-2">
               <Field label={t(lang, "field.postcode")}>
                 <Input
+                  disabled={editingLocked}
                   value={state.location.postcode}
                   onChange={(e) =>
                     updateState({
@@ -2002,6 +2116,7 @@ export function OngevalWizard({
               </Field>
               <Field label={t(lang, "field.city")}>
                 <Input
+                  disabled={editingLocked}
                   value={state.location.stad}
                   onChange={(e) =>
                     updateState({
@@ -2013,6 +2128,7 @@ export function OngevalWizard({
             </div>
             <Field label={t(lang, "field.country")}>
               <Input
+                disabled={editingLocked}
                 value={state.location.land}
                 onChange={(e) =>
                   updateState({
@@ -2025,6 +2141,7 @@ export function OngevalWizard({
               <Field label={t(lang, "field.date")}>
                 <Input
                   type="date"
+                  disabled={editingLocked}
                   value={state.location.datum}
                   onChange={(e) =>
                     updateState({
@@ -2036,6 +2153,7 @@ export function OngevalWizard({
               <Field label={t(lang, "field.time")}>
                 <Input
                   type="time"
+                  disabled={editingLocked}
                   value={state.location.tijd}
                   onChange={(e) =>
                     updateState({
@@ -2045,8 +2163,46 @@ export function OngevalWizard({
                 />
               </Field>
             </div>
+
+            {needsApproval ? (
+              <PartyALocationApprovalCard
+                lang={lang}
+                approval={approval}
+                fieldsFilled={fieldsFilled}
+                onSend={() => {
+                  if (!fieldsFilled) return;
+                  updateState({
+                    locationApproval: {
+                      status: "pending",
+                      approvedAt: null,
+                      rejectedAt: null,
+                      rejectionNote: "",
+                      approvedValuesHash: null,
+                    },
+                  });
+                }}
+                onRetract={() => {
+                  if (
+                    approval.status === "approved" &&
+                    !window.confirm(t(lang, "location.approval.a.retract_confirm"))
+                  ) {
+                    return;
+                  }
+                  updateState({
+                    locationApproval: {
+                      status: "idle",
+                      approvedAt: null,
+                      rejectedAt: null,
+                      rejectionNote: "",
+                      approvedValuesHash: null,
+                    },
+                  });
+                }}
+              />
+            ) : null}
           </div>
         );
+      }
       case "injuries_material":
         return (
           <div className="flex flex-col gap-6 px-4 py-8">
@@ -2391,12 +2547,42 @@ export function OngevalWizard({
           </div>
         );
       case "complete":
+        if (state.submissionMode === "scan") {
+          return (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col items-center gap-1 px-4 pt-6 text-center">
+                <p className="text-[18px] font-semibold text-[#163247]">
+                  {t(lang, "scan.complete_title")}
+                </p>
+                <p className="text-[13px] leading-relaxed text-[#5F7382]">
+                  {t(lang, "scan.complete_subtitle")}
+                </p>
+              </div>
+              <ScanPdfPreview
+                storagePath={state.scanSubmission.storagePath}
+                lang={lang}
+              />
+              <SendToFleetManagerSection
+                reportId={reportId}
+                lang={lang}
+                isPartyB={false}
+              />
+            </div>
+          );
+        }
         return (
-          <PdfPreviewStep
-            reportId={reportId}
-            guestSecret={guestSecret}
-            lang={lang}
-          />
+          <div className="flex flex-col gap-2">
+            <PdfPreviewStep
+              reportId={reportId}
+              guestSecret={guestSecret}
+              lang={lang}
+            />
+            <SendToFleetManagerSection
+              reportId={reportId}
+              lang={lang}
+              isPartyB={state.role === "B" && state.devicesCount === 2}
+            />
+          </div>
         );
       default:
         return null;
@@ -2478,6 +2664,8 @@ export function OngevalWizard({
     }
     if (
       stepId === "situation_main" ||
+      stepId === "submission_mode" ||
+      stepId === "scan_capture" ||
       stepId === "driver_select" ||
       stepId === "policyholder_select" ||
       stepId === "parties_count" ||
@@ -2527,7 +2715,9 @@ export function OngevalWizard({
         bannerDismissed={bannerDismissed}
         onDismissBanner={bannerMessage ? dismissBanner : undefined}
         onBack={goBack}
-        showBack={stepId !== "driver_select"}
+        showBack={
+          stepId !== "submission_mode" && state.navigationHistory.length > 0
+        }
         onExit={handleExit}
         footer={footer}
         lang={lang}
@@ -2560,6 +2750,304 @@ export function OngevalWizard({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+type LocationApprovalState = AccidentReportState["locationApproval"];
+
+function PartyALocationApprovalCard({
+  lang,
+  approval,
+  fieldsFilled,
+  onSend,
+  onRetract,
+}: {
+  lang: OngevalLang;
+  approval: LocationApprovalState;
+  fieldsFilled: boolean;
+  onSend: () => void;
+  onRetract: () => void;
+}) {
+  if (approval.status === "pending") {
+    return (
+      <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-[#E0A800]/30 bg-[#FFF8E1] px-4 py-3">
+        <div className="flex items-center gap-2 text-[#7A5A00]">
+          <Clock className="size-4" strokeWidth={2} />
+          <p className="font-heading text-[14px] font-semibold">
+            {t(lang, "location.approval.a.pending_title")}
+          </p>
+        </div>
+        <p className="text-[12.5px] leading-snug text-[#5F4A0E]">
+          {t(lang, "location.approval.a.pending_body")}
+        </p>
+        <button
+          type="button"
+          onClick={onRetract}
+          className="mt-1 inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-[#E0A800]/40 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#7A5A00] transition-colors hover:bg-[#FFF1C2]"
+        >
+          <Pencil className="size-3.5" strokeWidth={2} />
+          {t(lang, "location.approval.a.retract")}
+        </button>
+      </div>
+    );
+  }
+
+  if (approval.status === "approved") {
+    return (
+      <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-[#1F8A4C]/30 bg-[#E8F7EE] px-4 py-3">
+        <div className="flex items-center gap-2 text-[#1F8A4C]">
+          <Check className="size-4" strokeWidth={2.5} />
+          <p className="font-heading text-[14px] font-semibold">
+            {t(lang, "location.approval.a.approved_title")}
+          </p>
+        </div>
+        <p className="text-[12.5px] leading-snug text-[#205437]">
+          {t(lang, "location.approval.a.approved_body")}
+        </p>
+        <button
+          type="button"
+          onClick={onRetract}
+          className="mt-1 inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-[#1F8A4C]/30 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#1F8A4C] transition-colors hover:bg-[#D5EFDF]"
+        >
+          <Pencil className="size-3.5" strokeWidth={2} />
+          {t(lang, "location.approval.a.retract")}
+        </button>
+      </div>
+    );
+  }
+
+  if (approval.status === "rejected") {
+    return (
+      <div className="mt-2 flex flex-col gap-2 rounded-2xl border border-[#E11D2E]/30 bg-[#FDECEE] px-4 py-3">
+        <div className="flex items-center gap-2 text-[#B42318]">
+          <X className="size-4" strokeWidth={2.5} />
+          <p className="font-heading text-[14px] font-semibold">
+            {t(lang, "location.approval.a.rejected_title")}
+          </p>
+        </div>
+        <p className="text-[12.5px] leading-snug text-[#7A1F18]">
+          {t(lang, "location.approval.a.rejected_body")}
+        </p>
+        {approval.rejectionNote.trim().length > 0 ? (
+          <div className="rounded-lg border border-[#E11D2E]/20 bg-white px-3 py-2 text-[12.5px] leading-snug text-[#163247]">
+            <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#B42318]">
+              {t(lang, "location.approval.a.rejected_note")}
+            </p>
+            <p className="whitespace-pre-line">{approval.rejectionNote}</p>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={!fieldsFilled}
+          className="mt-1 inline-flex items-center justify-center gap-1.5 self-start rounded-lg bg-[#2799D7] px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#1e7bb0] disabled:opacity-50"
+        >
+          <Send className="size-3.5" strokeWidth={2} />
+          {t(lang, "location.approval.a.send")}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onSend}
+      disabled={!fieldsFilled}
+      className="mt-1 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2799D7] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e7bb0] disabled:opacity-50"
+      title={!fieldsFilled ? t(lang, "location.approval.a.send_disabled") : undefined}
+    >
+      <Send className="size-4" strokeWidth={2} />
+      {t(lang, "location.approval.a.send")}
+    </button>
+  );
+}
+
+function PartyBLocationApprovalView({
+  lang,
+  location,
+  approval,
+  onApprove,
+  onReject,
+}: {
+  lang: OngevalLang;
+  location: AccidentReportState["location"];
+  approval: LocationApprovalState;
+  onApprove: () => void;
+  onReject: (note: string) => void;
+}) {
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [note, setNote] = useState("");
+
+  // Voor partij B: enkel akkoord/weigeren tonen als A de gegevens expliciet
+  // ter goedkeuring heeft gestuurd. Anders (idle) wachten tot A klaar is.
+  if (approval.status === "idle") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+        <Clock className="size-8 text-[#5F7382]" strokeWidth={1.5} />
+        <p className="text-[14px] leading-snug text-[#5F7382]">
+          {t(lang, "location.approval.b.waiting")}
+        </p>
+      </div>
+    );
+  }
+
+  if (approval.status === "approved") {
+    return (
+      <div className="flex flex-col gap-3 px-4 py-6">
+        <div className="rounded-2xl border border-[#1F8A4C]/30 bg-[#E8F7EE] px-4 py-4">
+          <div className="flex items-center gap-2 text-[#1F8A4C]">
+            <Check className="size-5" strokeWidth={2.5} />
+            <p className="font-heading text-[15px] font-semibold">
+              {t(lang, "location.approval.b.approved_title")}
+            </p>
+          </div>
+          <p className="mt-1 text-[13px] leading-snug text-[#205437]">
+            {t(lang, "location.approval.b.approved_body")}
+          </p>
+        </div>
+        <ReadonlyLocationSummary lang={lang} location={location} />
+      </div>
+    );
+  }
+
+  if (approval.status === "rejected") {
+    return (
+      <div className="flex flex-col gap-3 px-4 py-6">
+        <div className="rounded-2xl border border-[#E11D2E]/30 bg-[#FDECEE] px-4 py-4">
+          <div className="flex items-center gap-2 text-[#B42318]">
+            <X className="size-5" strokeWidth={2.5} />
+            <p className="font-heading text-[15px] font-semibold">
+              {t(lang, "location.approval.b.rejected_title")}
+            </p>
+          </div>
+          <p className="mt-1 text-[13px] leading-snug text-[#7A1F18]">
+            {t(lang, "location.approval.b.rejected_body")}
+          </p>
+        </div>
+        <ReadonlyLocationSummary lang={lang} location={location} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 px-4 py-4">
+      <div className="rounded-2xl border border-[#2799D7]/20 bg-[#E8F4FB] px-4 py-3">
+        <p className="font-heading text-[14px] font-semibold text-[#163247]">
+          {t(lang, "location.approval.b.title")}
+        </p>
+        <p className="mt-1 text-[12.5px] leading-snug text-[#163247]/80">
+          {t(lang, "location.approval.b.intro")}
+        </p>
+      </div>
+
+      <ReadonlyLocationSummary lang={lang} location={location} />
+
+      {showRejectForm ? (
+        <div className="flex flex-col gap-2 rounded-2xl border border-[#E11D2E]/20 bg-white px-4 py-3 shadow-sm">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-[#5F7382]">
+              {t(lang, "location.approval.b.note_label")}
+            </span>
+            <textarea
+              className="min-h-[100px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              placeholder={t(lang, "location.approval.b.note_placeholder")}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onReject(note.trim())}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#E11D2E] px-4 text-[14px] font-semibold text-white transition-colors hover:bg-[#B91624]"
+            >
+              <Send className="size-4" strokeWidth={2} />
+              {t(lang, "location.approval.b.send_rejection")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowRejectForm(false);
+                setNote("");
+              }}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-black/[0.08] bg-white px-4 text-[14px] font-medium text-[#163247] hover:bg-[#F4F8FB]"
+            >
+              {t(lang, "location.approval.b.cancel")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onApprove}
+            className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1F8A4C] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#176B3B]"
+          >
+            <Check className="size-4" strokeWidth={2.5} />
+            {t(lang, "location.approval.b.approve")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowRejectForm(true)}
+            className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[#E11D2E]/30 bg-white px-4 text-[15px] font-semibold text-[#E11D2E] shadow-sm transition-colors hover:bg-[#FDECEE]"
+          >
+            <X className="size-4" strokeWidth={2.5} />
+            {t(lang, "location.approval.b.reject")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReadonlyLocationSummary({
+  lang,
+  location,
+}: {
+  lang: OngevalLang;
+  location: AccidentReportState["location"];
+}) {
+  const dash = t(lang, "common.dash");
+  const addressLines: string[] = [];
+  const line1 = [location.straat, location.huisnummer].filter((s) => s.trim()).join(" ");
+  if (line1) addressLines.push(line1);
+  const line2 = [location.postcode, location.stad].filter((s) => s.trim()).join(" ");
+  if (line2) addressLines.push(line2);
+  if (location.land.trim()) addressLines.push(location.land);
+
+  const dateText = formatDateForDisplay(location.datum) || dash;
+  const timeText = formatTimeForDisplay(location.tijd) || dash;
+
+  return (
+    <div className="flex flex-col divide-y divide-black/[0.05] rounded-2xl border border-black/[0.06] bg-white shadow-sm">
+      <div className="px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5F7382]">
+          {t(lang, "overview.section.place")}
+        </p>
+        <div className="mt-1 text-[14px] leading-snug text-[#163247]">
+          {addressLines.length > 0 ? (
+            addressLines.map((l) => <div key={l}>{l}</div>)
+          ) : (
+            <span className="text-[#5F7382]">{dash}</span>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 px-4 py-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5F7382]">
+            {t(lang, "field.date")}
+          </p>
+          <p className="mt-1 text-[14px] text-[#163247]">{dateText}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5F7382]">
+            {t(lang, "field.time")}
+          </p>
+          <p className="mt-1 text-[14px] text-[#163247]">{timeText}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3134,6 +3622,158 @@ function PdfPreviewStep({
           {t(lang, "complete.download")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+type SendStatus = "idle" | "sending" | "sent" | "failed";
+
+function sendErrorMessage(lang: OngevalLang, key: string | null): string {
+  switch (key) {
+    case "no_recipient":
+      return t(lang, "send.error.no_recipient");
+    case "incomplete":
+      return t(lang, "send.error.incomplete");
+    case "forbidden":
+      return t(lang, "send.error.forbidden");
+    default:
+      return t(lang, "send.error.generic");
+  }
+}
+
+function SendToFleetManagerSection({
+  reportId,
+  lang,
+  isPartyB,
+}: {
+  reportId: string;
+  lang: OngevalLang;
+  isPartyB: boolean;
+}) {
+  const [status, setStatus] = useState<SendStatus>("idle");
+  const [recipient, setRecipient] = useState<string | null>(null);
+  const [cc, setCc] = useState<string | null>(null);
+  const [simulated, setSimulated] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+
+  const send = useCallback(async () => {
+    setStatus("sending");
+    setErrorKey(null);
+    setErrorDetail(null);
+    try {
+      const res = await fetch(`/api/ongeval/${reportId}/send`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.ok === false) {
+        const err = (body?.error as string | undefined) ?? "generic";
+        setErrorKey(err);
+        setErrorDetail(typeof body?.detail === "string" ? body.detail : null);
+        setStatus("failed");
+        return;
+      }
+      setRecipient(body?.recipient ?? null);
+      setCc(body?.cc ?? null);
+      setSimulated(Boolean(body?.simulated));
+      setStatus("sent");
+    } catch (e) {
+      setErrorKey("generic");
+      setErrorDetail(e instanceof Error ? e.message : null);
+      setStatus("failed");
+    }
+  }, [reportId]);
+
+  if (isPartyB) {
+    return (
+      <div className="mx-4 mb-6 rounded-2xl border border-black/[0.06] bg-[#F4F8FB] px-4 py-3 text-[13px] text-[#5F7382]">
+        {t(lang, "send.b.waiting")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-4 mb-6 flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Send className="size-4 text-[#2799D7]" strokeWidth={2} />
+        <p className="font-heading text-[15px] font-semibold text-[#163247]">
+          {t(lang, "send.title")}
+        </p>
+      </div>
+      {status !== "sent" ? (
+        <p className="text-[12.5px] leading-snug text-[#5F7382]">
+          {t(lang, "send.intro")}
+        </p>
+      ) : null}
+
+      {status === "sent" ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-[#1F8A4C]/30 bg-[#E8F7EE] px-3 py-3">
+          <div className="flex items-center gap-2 text-[#1F8A4C]">
+            <Check className="size-4" strokeWidth={2.5} />
+            <p className="font-heading text-[14px] font-semibold">
+              {t(lang, "send.success_title")}
+            </p>
+          </div>
+          {recipient ? (
+            <p className="text-[12.5px] leading-snug text-[#205437]">
+              <span className="font-medium">{t(lang, "send.success_to")}</span>{" "}
+              {recipient}
+            </p>
+          ) : null}
+          {cc ? (
+            <p className="text-[12.5px] leading-snug text-[#205437]">
+              <span className="font-medium">{t(lang, "send.success_cc")}</span>{" "}
+              {cc}
+            </p>
+          ) : null}
+          {simulated ? (
+            <p className="rounded-md bg-white/60 px-2 py-1 text-[11.5px] text-[#7A5A00]">
+              {t(lang, "send.success_simulated")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {status === "failed" ? (
+        <div className="flex flex-col gap-1.5 rounded-xl border border-[#E11D2E]/30 bg-[#FDECEE] px-3 py-3">
+          <div className="flex items-center gap-2 text-[#B42318]">
+            <X className="size-4" strokeWidth={2.5} />
+            <p className="font-heading text-[14px] font-semibold">
+              {t(lang, "send.failure_title")}
+            </p>
+          </div>
+          <p className="text-[12.5px] leading-snug text-[#7A1F18]">
+            {sendErrorMessage(lang, errorKey)}
+          </p>
+          {errorDetail && errorKey !== "no_recipient" ? (
+            <p className="text-[11px] text-[#7A1F18]/80">{errorDetail}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {status !== "sending" ? (
+        <Button
+          type="button"
+          onClick={() => void send()}
+          disabled={status === "sent"}
+          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white shadow-sm hover:bg-[#1e7bb0] active:bg-[#1a6a9a] disabled:opacity-60"
+        >
+          <Send aria-hidden="true" />
+          {status === "failed"
+            ? t(lang, "send.button_retry")
+            : t(lang, "send.button")}
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          disabled
+          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white opacity-80"
+        >
+          <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
+          {t(lang, "send.sending")}
+        </Button>
+      )}
     </div>
   );
 }

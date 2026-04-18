@@ -7,6 +7,7 @@ import { toIsoDate, toIsoTime } from "@/lib/ongeval/date-utils";
 
 const PHASE_ORDER: OngevalStepId[][] = [
   [
+    "submission_mode",
     "driver_select",
     "driver_employee_form",
     "driver_other_form",
@@ -44,15 +45,63 @@ const PHASE_ORDER: OngevalStepId[][] = [
   ["signature_a", "signature_b", "complete"],
 ];
 
-export function getProgressForStep(stepId: OngevalStepId): {
+/**
+ * Veel kortere phase-balk voor de scan-fallback flow. Drie fases:
+ * 1) modus kiezen, 2) pagina's scannen, 3) bevestigen + verzenden.
+ */
+const SCAN_PHASE_ORDER: OngevalStepId[][] = [
+  ["submission_mode"],
+  ["scan_capture"],
+  ["complete"],
+];
+
+const SCAN_TRACK_STEP_IDS = new Set<OngevalStepId>(["scan_capture"]);
+
+/**
+ * Plaats + tijd vereisen wederzijdse goedkeuring zodra beide partijen
+ * elk op hun eigen toestel zitten. In single-device of single-party scenario's
+ * wordt de approval-flow overgeslagen.
+ */
+export function requiresLocationApproval(state: AccidentReportState): boolean {
+  return state.partiesCount === 2 && state.devicesCount === 2;
+}
+
+/** Stabiele FNV-1a 32-bit hash, voldoende om mutatie van velden te detecteren. */
+function fnv1a(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** Hash van de location-velden waarop B akkoord ging. */
+export function computeLocationHash(
+  loc: AccidentReportState["location"],
+): string {
+  return fnv1a(
+    [loc.straat, loc.huisnummer, loc.postcode, loc.stad, loc.land, loc.datum, loc.tijd]
+      .map((s) => (s ?? "").trim())
+      .join("|"),
+  );
+}
+
+export function getProgressForStep(
+  stepId: OngevalStepId,
+  state?: AccidentReportState,
+): {
   step: number;
   total: number;
   fraction: number;
 } {
-  const total = PHASE_ORDER.length;
+  const usingScanTrack =
+    state?.submissionMode === "scan" || SCAN_TRACK_STEP_IDS.has(stepId);
+  const phases = usingScanTrack ? SCAN_PHASE_ORDER : PHASE_ORDER;
+  const total = phases.length;
   let phaseIndex = 0;
-  for (let i = 0; i < PHASE_ORDER.length; i++) {
-    if (PHASE_ORDER[i].includes(stepId)) {
+  for (let i = 0; i < phases.length; i++) {
+    if (phases[i].includes(stepId)) {
       phaseIndex = i;
       break;
     }
@@ -130,6 +179,11 @@ export function getNextStepId(
   state: AccidentReportState,
 ): OngevalStepId | null {
   switch (from) {
+    case "submission_mode":
+      if (state.submissionMode === "scan") return "scan_capture";
+      return "driver_select";
+    case "scan_capture":
+      return "complete";
     case "driver_select":
       return afterDriverSelect(state);
     case "driver_employee_form":
@@ -252,6 +306,19 @@ export function validateStep(
 ): boolean {
   const loc = state.location;
   switch (stepId) {
+    case "submission_mode":
+      return state.submissionMode !== null;
+    case "scan_capture": {
+      const m = state.scanSubmission.metadata;
+      return (
+        state.scanSubmission.storagePath !== null &&
+        state.scanSubmission.uploadedAt !== null &&
+        state.scanSubmission.pageCount >= 1 &&
+        m.datum.trim().length > 0 &&
+        m.stad.trim().length > 0 &&
+        m.nummerplaat.trim().length > 0
+      );
+    }
     case "driver_select":
       return state.driverWasEmployee !== null;
     case "driver_other_form":
@@ -325,16 +392,19 @@ export function validateStep(
         state.partyB.bestuurder.voornaam.trim().length > 0 &&
         state.partyB.bestuurder.naam.trim().length > 0
       );
-    case "location_time":
-      return (
+    case "location_time": {
+      const fieldsOk =
         loc.straat.trim().length > 0 &&
         loc.huisnummer.trim().length > 0 &&
         loc.postcode.trim().length > 0 &&
         loc.stad.trim().length > 0 &&
         loc.land.trim().length > 0 &&
         loc.datum.trim().length > 0 &&
-        loc.tijd.trim().length > 0
-      );
+        loc.tijd.trim().length > 0;
+      if (!fieldsOk) return false;
+      if (!requiresLocationApproval(state)) return true;
+      return state.locationApproval.status === "approved";
+    }
     case "injuries_material":
       return state.gewonden !== null && state.materieleSchadeAnders !== null;
     case "witnesses":
@@ -382,6 +452,8 @@ export function validateStep(
 
 export function getStepTitle(stepId: OngevalStepId): string {
   const titles: Record<OngevalStepId, string> = {
+    submission_mode: "Hoe wil je aangifte doen?",
+    scan_capture: "Papieren formulier scannen",
     driver_select: "Bestuurder",
     driver_employee_form: "Bestuurder",
     driver_other_form: "Bestuurder",
@@ -610,6 +682,65 @@ export function mergePayloadIntoState(
     datum: toIsoDate(merged.location.datum),
     tijd: toIsoTime(merged.location.tijd),
   };
+
+  // Submission-mode + scan-submission veilig mergen vanuit ruwe payload.
+  const rawMode = (o as { submissionMode?: unknown }).submissionMode;
+  if (rawMode === "wizard" || rawMode === "scan") {
+    merged.submissionMode = rawMode;
+  } else if (
+    merged.currentStepId !== "submission_mode" &&
+    !SCAN_TRACK_STEP_IDS.has(merged.currentStepId)
+  ) {
+    // Bestaande draft van vóór de mode-picker: forceer wizard zodat we niet
+    // terugvallen naar de keuzestap.
+    merged.submissionMode = "wizard";
+  } else {
+    merged.submissionMode = base.submissionMode;
+  }
+  const rawScan = (o as { scanSubmission?: unknown }).scanSubmission;
+  if (rawScan && typeof rawScan === "object") {
+    const s = rawScan as Record<string, unknown>;
+    const rawMeta =
+      typeof s.metadata === "object" && s.metadata !== null
+        ? (s.metadata as Record<string, unknown>)
+        : {};
+    merged.scanSubmission = {
+      storagePath: typeof s.storagePath === "string" ? s.storagePath : null,
+      pageCount: typeof s.pageCount === "number" ? s.pageCount : 0,
+      uploadedAt: typeof s.uploadedAt === "string" ? s.uploadedAt : null,
+      metadata: {
+        datum: typeof rawMeta.datum === "string" ? toIsoDate(rawMeta.datum) : "",
+        stad: typeof rawMeta.stad === "string" ? rawMeta.stad : "",
+        nummerplaat:
+          typeof rawMeta.nummerplaat === "string" ? rawMeta.nummerplaat : "",
+        notitie: typeof rawMeta.notitie === "string" ? rawMeta.notitie : "",
+      },
+    };
+  } else {
+    merged.scanSubmission = base.scanSubmission;
+  }
+
+  // Approval-state vullen + verouderde approvals invalideren.
+  const rawApproval = (o as { locationApproval?: unknown }).locationApproval;
+  merged.locationApproval = {
+    ...base.locationApproval,
+    ...(typeof rawApproval === "object" && rawApproval !== null
+      ? (rawApproval as Partial<AccidentReportState["locationApproval"]>)
+      : {}),
+  };
+  if (
+    merged.locationApproval.status === "approved" &&
+    merged.locationApproval.approvedValuesHash !== null &&
+    computeLocationHash(merged.location) !== merged.locationApproval.approvedValuesHash
+  ) {
+    merged.locationApproval = {
+      status: "idle",
+      approvedAt: null,
+      rejectedAt: null,
+      rejectionNote: "",
+      approvedValuesHash: null,
+    };
+  }
   merged.employeeDriver = {
     ...merged.employeeDriver,
     geboortedatum: toIsoDate(merged.employeeDriver.geboortedatum),

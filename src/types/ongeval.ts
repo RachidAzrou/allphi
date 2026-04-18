@@ -6,6 +6,8 @@ export const ONGEVAL_PAYLOAD_VERSION = 2 as const;
 
 /** All known wizard screen ids (extend when adding branches). */
 export type OngevalStepId =
+  | "submission_mode"
+  | "scan_capture"
   | "driver_select"
   | "driver_employee_form"
   | "driver_other_form"
@@ -45,6 +47,29 @@ export type OngevalStepId =
   | "signature_a"
   | "signature_b"
   | "complete";
+
+export type SubmissionMode = "wizard" | "scan";
+
+/**
+ * Metadata gathered in de scan-fallback flow. Geen wizard-velden, enkel het
+ * minimum om de mail naar de fleetmanager goed onderwerpen + opvolgen.
+ */
+export type ScanSubmission = {
+  /** Server-side path in `ongeval-scans` bucket (na upload). */
+  storagePath: string | null;
+  pageCount: number;
+  uploadedAt: string | null;
+  metadata: {
+    /** Datum van het ongeval (YYYY-MM-DD). */
+    datum: string;
+    /** Stad van het ongeval (voor onderwerp). */
+    stad: string;
+    /** Eigen nummerplaat (voor onderwerp + identificatie). */
+    nummerplaat: string;
+    /** Optionele toelichting voor de fleetmanager. */
+    notitie: string;
+  };
+};
 
 export type PartyEntryMode = "qr" | "profile" | "manual";
 
@@ -114,6 +139,17 @@ export type AccidentReportState = {
   currentStepId: OngevalStepId;
   navigationHistory: OngevalStepId[];
 
+  /**
+   * Hoe de aangifte tot stand komt.
+   * - "wizard" (default): bestaande stap-voor-stap flow.
+   * - "scan": A scant het papieren formulier en stuurt enkel de PDF door.
+   * `null` zolang de gebruiker nog niets gekozen heeft op de mode-picker.
+   */
+  submissionMode: SubmissionMode | null;
+
+  /** Status + metadata wanneer `submissionMode === "scan"`. */
+  scanSubmission: ScanSubmission;
+
   partiesCount: 1 | 2 | null;
   devicesCount: 1 | 2 | null;
   role: "A" | "B" | null;
@@ -132,6 +168,22 @@ export type AccidentReportState = {
     land: string;
     datum: string;
     tijd: string;
+  };
+
+  /**
+   * Wederzijdse goedkeuring van plaats + tijd.
+   * Enkel relevant in 2 partijen + 2 toestellen-scenario.
+   * - "idle": A bewerkt vrij, nog niet voorgelegd.
+   * - "pending": A heeft ter goedkeuring gestuurd, B beslist.
+   * - "approved": B akkoord; A kan verder. Hash bewaart de waarden.
+   * - "rejected": B niet akkoord; A ziet opmerking en past aan.
+   */
+  locationApproval: {
+    status: "idle" | "pending" | "approved" | "rejected";
+    approvedAt: string | null;
+    rejectedAt: string | null;
+    rejectionNote: string;
+    approvedValuesHash: string | null;
   };
 
   gewonden: boolean | null;
@@ -205,8 +257,20 @@ export function createInitialAccidentState(): AccidentReportState {
 
   return {
     version: ONGEVAL_PAYLOAD_VERSION,
-    currentStepId: "driver_select",
+    currentStepId: "submission_mode",
     navigationHistory: [],
+    submissionMode: null,
+    scanSubmission: {
+      storagePath: null,
+      pageCount: 0,
+      uploadedAt: null,
+      metadata: {
+        datum: "",
+        stad: "",
+        nummerplaat: "",
+        notitie: "",
+      },
+    },
     partiesCount: null,
     devicesCount: null,
     role: null,
@@ -223,6 +287,13 @@ export function createInitialAccidentState(): AccidentReportState {
       land: "België",
       datum: "",
       tijd: "",
+    },
+    locationApproval: {
+      status: "idle",
+      approvedAt: null,
+      rejectedAt: null,
+      rejectionNote: "",
+      approvedValuesHash: null,
     },
     gewonden: null,
     materieleSchadeAnders: null,
