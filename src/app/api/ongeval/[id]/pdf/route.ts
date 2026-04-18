@@ -52,6 +52,21 @@ function addressLine(a: {
   return [street + bus, city].filter((s) => s.trim()).join(", ");
 }
 
+/** Straat + huisnr + bus + stad (zonder postcode). Voor velden waar postcode
+ * een eigen veld krijgt (zoals in rubriek 6 verzekeringsnemer). */
+function streetLine(a: {
+  straat: string;
+  huisnummer: string;
+  bus?: string;
+  stad?: string;
+}): string {
+  const street = [a.straat, a.huisnummer].filter(Boolean).join(" ");
+  const bus = a.bus ? ` bus ${a.bus}` : "";
+  const head = (street + bus).trim();
+  const stad = (a.stad ?? "").trim();
+  return [head, stad].filter(Boolean).join(", ");
+}
+
 function fullName(p: { voornaam: string; naam: string }): string {
   return [p.voornaam, p.naam].filter(Boolean).join(" ");
 }
@@ -107,68 +122,106 @@ async function embedSignaturePng(
 }
 
 /* ---------------------------------------------------------- impact box
- * Mini auto-silhouet met rode pijl. Gebruikt voor sectie 10 (raakpunt).
+ * Toont de officiële EAB-voertuigsilhouetten (motor, auto, vrachtwagen) uit
+ * `/public/impact-vehicles.png` en plakt er een rode pijl over op het door de
+ * gebruiker aangeduide raakpunt.
+ *
+ * Wordt UITSLUITEND op het samenvattingsblad gebruikt; op het officiële
+ * aanrijdingsformulier worden de voertuigen NIET overgetekend, want het
+ * sjabloon bevat zelf al schematische voertuigen in sectie 10.
  */
-function drawImpactBox(
+type EmbeddedImg = Awaited<ReturnType<PDFDocument["embedPng"]>>;
+
+async function drawImpactBox(
   page: PDFPage,
-  font: PDFFont,
+  pdfDoc: PDFDocument,
   baseX: number,
   baseY: number,
   w: number,
   h: number,
   point: { x: number; y: number } | null,
   party: "A" | "B",
-) {
+  cachedImage?: EmbeddedImg,
+): Promise<EmbeddedImg | undefined> {
+  const accent = party === "A" ? rgb(0.15, 0.6, 0.84) : rgb(0.85, 0.64, 0.15);
   page.drawRectangle({
     x: baseX,
     y: baseY,
     width: w,
     height: h,
-    borderColor: rgb(0.65, 0.72, 0.79),
-    borderWidth: 0.6,
-  });
-  const carW = w * 0.5;
-  const carH = h * 0.82;
-  const carX = baseX + (w - carW) / 2;
-  const carY = baseY + (h - carH) / 2;
-  const body = party === "A" ? rgb(0.18, 0.5, 0.84) : rgb(0.97, 0.79, 0.28);
-  page.drawRectangle({
-    x: carX,
-    y: carY,
-    width: carW,
-    height: carH,
-    color: body,
-    borderColor: rgb(0.09, 0.17, 0.25),
-    borderWidth: 0.4,
-  });
-  // Voorruit (bovenaan).
-  page.drawRectangle({
-    x: carX + carW * 0.15,
-    y: carY + carH * 0.72,
-    width: carW * 0.7,
-    height: carH * 0.12,
-    color: rgb(0.85, 0.93, 0.98),
-  });
-  // Label in het midden.
-  drawText(page, party, carX + carW / 2 - 2.4, carY + carH / 2 - 3, {
-    font,
-    size: 7,
     color: rgb(1, 1, 1),
+    borderColor: accent,
+    borderWidth: 0.8,
   });
+  let img = cachedImage;
+  if (!img) {
+    try {
+      const bytes = await readFile(
+        path.join(process.cwd(), "public", "impact-vehicles.png"),
+      );
+      img = await pdfDoc.embedPng(bytes);
+    } catch (e) {
+      console.warn("[pdf] impact image load failed", e);
+      return undefined;
+    }
+  }
+  if (!img) return undefined;
+  // Behoud aspect ratio — image is 1024x797.
+  const ratio = img.width / img.height;
+  let drawW = w - 6;
+  let drawH = drawW / ratio;
+  if (drawH > h - 6) {
+    drawH = h - 6;
+    drawW = drawH * ratio;
+  }
+  const drawX = baseX + (w - drawW) / 2;
+  const drawY = baseY + (h - drawH) / 2;
+  page.drawImage(img, { x: drawX, y: drawY, width: drawW, height: drawH });
   if (point) {
-    const px = carX + point.x * carW;
-    const py = carY + (1 - point.y) * carH;
-    // Rood pijltje (driehoek-achtig) dat naar binnen wijst.
-    page.drawCircle({
+    const px = drawX + point.x * drawW;
+    // UI gebruikt y=0 boven, pdf-lib y=0 onder → inverteren.
+    const py = drawY + (1 - point.y) * drawH;
+    drawImpactArrow(page, px, py);
+  }
+  return img;
+}
+
+/**
+ * Rode neerwaartse pijl met de tip exact op (px, py). Schacht erboven, vlag
+ * eronder uit de tip — visueel hetzelfde als de pijl in de wizard.
+ */
+function drawImpactArrow(page: PDFPage, px: number, py: number) {
+  const red = rgb(0.88, 0.11, 0.18);
+  const dark = rgb(0.48, 0.04, 0.08);
+  const shaftW = 2.6;
+  const shaftH = 12;
+  const headH = 10;
+  const headHalfW = 6;
+  // Driehoekige pijlpunt: tip op (px, py), basis `headH` pt boven de tip.
+  // pdf-lib past intern `scale(1, -1)` toe op SVG-paden, dus negatieve y in de
+  // path-string betekent in pagina-coördinaten omhoog (gewenst).
+  page.drawSvgPath(
+    `M 0 0 L ${headHalfW} ${-headH} L ${-headHalfW} ${-headH} Z`,
+    {
       x: px,
       y: py,
-      size: 2.6,
-      color: rgb(0.88, 0.11, 0.18),
-      borderColor: rgb(0.48, 0.04, 0.08),
-      borderWidth: 0.5,
-    });
-  }
+      color: red,
+      borderColor: dark,
+      borderWidth: 0.4,
+    },
+  );
+  // Schacht boven de pijlpunt.
+  page.drawRectangle({
+    x: px - shaftW / 2,
+    y: py + headH,
+    width: shaftW,
+    height: shaftH,
+    color: red,
+    borderColor: dark,
+    borderWidth: 0.4,
+  });
 }
+
 
 /* ---------------------------------------------------------- section 12
  * Mapping: wizard-toedrachtkeuze → welke van de 17 vakjes voor A/B aangevinkt.
@@ -303,22 +356,28 @@ function computeCheckboxes(state: AccidentReportState): {
 
 const TEMPLATE_PAGE_1 = {
   // Sectie 1 — Datum/Uur/Plaats.
-  date: { x: 92, y: 805 },
-  time: { x: 128, y: 805 },
+  // De labels "Datum aanrijding" en "Uur" staan op y=804.3 met slechts ~23pt
+  // horizontale ruimte tot het volgende label — onvoldoende voor "DD/MM/YYYY"
+  // op fontsize 10. We schrijven datum & uur dus net onder het label op y=792
+  // (de rij is daar leeg aan de linkerzijde, het "Land:"-label start pas op
+  // x=155 zodat we tot x≈110 ongehinderd kunnen schrijven).
+  date: { x: 29, y: 792 },
+  time: { x: 113, y: 792 },
   placeLine1: { x: 253, y: 805, maxWidth: 78 },
   placeLine2: { x: 224, y: 792, maxWidth: 108 },
   // Sectie 2 — Land (locatie).
   country: { x: 180, y: 792, maxWidth: 39 },
-  // Sectie 3 — Gewonden (kruisjes bij neen/ja).
-  injuriesNo: { x: 350, y: 791 },
-  injuriesYes: { x: 397, y: 791 },
+  // Sectie 3 — Gewonden zelfs licht? (kruisjes IN het vakje vóór "neen"/"ja").
+  // Exacte boxcentra uit `extract-template-boxes.mjs`: w=5.71, h=5.79.
+  injuriesNo: { x: 378.92, y: 794.53 },
+  injuriesYes: { x: 413.82, y: 794.53 },
   // Sectie 4 — Materiële schade. Twee aparte vragen op het sjabloon (andere
   // voertuigen, andere objecten); we beantwoorden beiden met dezelfde wizard-
-  // waarde.
-  damageOtherVehiclesNo: { x: 14, y: 750 },
-  damageOtherVehiclesYes: { x: 62, y: 750 },
-  damageOtherObjectsNo: { x: 106, y: 750 },
-  damageOtherObjectsYes: { x: 148, y: 750 },
+  // waarde. Boxcentra ook geëxtraheerd: w=5.71, h=5.79.
+  damageOtherVehiclesNo: { x: 44.51, y: 754.01 },
+  damageOtherVehiclesYes: { x: 79.64, y: 754.01 },
+  damageOtherObjectsNo: { x: 132.01, y: 754.01 },
+  damageOtherObjectsYes: { x: 165.49, y: 754.01 },
   // Sectie 5 — Getuigen (drie regels).
   witnessLines: [
     { x: 328, y: 775, maxWidth: 237 },
@@ -374,8 +433,6 @@ const COL_A = {
   },
   // Sectie 15 — handtekening (klein vakje midden-onder).
   signature: { x: 200, y: 22, w: 80, h: 32 },
-  // Sectie 10 — raakpuntdiagram (mini autotje rechts van labels A).
-  impact: { x: 110, y: 130, w: 130, h: 85 },
 } as const;
 
 /** Coördinaten van de rechterkolom (Partij B). Δx t.o.v. A = +362.5. */
@@ -423,57 +480,64 @@ const COL_B = {
     ],
   },
   signature: { x: 285, y: 22, w: 80, h: 32 },
-  impact: { x: 370, y: 130, w: 130, h: 85 },
 } as const;
 
 /**
- * Y-positie per vakje (1..17) van de toedrachtkolom in sectie 12, exact
- * overgenomen uit de pdf-text extractie. De boxes zelf staan rond x=225 (A)
- * en x=355 (B).
+ * Y-centrum per vakje (1..17) van de toedrachtkolom in sectie 12. Waarden
+ * komen rechtstreeks uit `scripts/extract-template-boxes.mjs` (cy van de
+ * vierkante checkbox-rechthoek in het sjabloon, w/h ≈ 6.82×6.92).
  */
 const CHECKBOX_ROW_Y: Record<number, number> = {
-  1: 683.2,
-  2: 674.7,
-  3: 646.9,
-  4: 630.7,
-  5: 605.4,
-  6: 580.9,
-  7: 556.2,
-  8: 530.3,
-  9: 497.8,
-  10: 472.4,
-  11: 456.7,
-  12: 441.5,
-  13: 425.7,
-  14: 410.1,
-  15: 394.3,
-  16: 359.8,
-  17: 335.1,
+  1: 686.59,
+  2: 678.31,
+  3: 651.16,
+  4: 634.37,
+  5: 609.33,
+  6: 584.28,
+  7: 559.99,
+  8: 534.28,
+  9: 501.52,
+  10: 475.91,
+  11: 460.14,
+  12: 444.95,
+  13: 429.46,
+  14: 413.70,
+  15: 397.94,
+  16: 363.32,
+  17: 338.69,
 };
 
 const CHECKBOX_COLUMN = {
-  aBoxCenterX: 232,
-  bBoxCenterX: 358,
-  totalAX: 226,
-  totalAY: 314,
-  totalBX: 354,
-  totalBY: 305,
+  aBoxCenterX: 219.17,
+  bBoxCenterX: 364.29,
+  // "Vermeld het aantal aangekruiste vakjes": twee 10.43 × 10.58 vakjes onder
+  // de toedrachtkolom. Centra geëxtraheerd uit het sjabloon. We berekenen de
+  // baseline-positie tijdens het renderen op basis van de tekstbreedte zodat
+  // het cijfer keurig in het midden van het vakje staat.
+  totalABoxCx: 220.98,
+  totalBBoxCx: 362.81,
+  totalBoxCy: 309.62,
 } as const;
 
-/** Teken een rood diagonaal X-kruis door het vakje rond (cx, cy). */
-function drawCheckbox(page: PDFPage, cx: number, cy: number) {
-  const r = 3.2;
+/**
+ * Teken een rood diagonaal X-kruis door het vakje rond (cx, cy). De `boxSize`
+ * is de breedte van het sjabloon-vakje; we tekenen het kruis ietsje binnen
+ * die rand zodat het netjes binnen het vakje valt.
+ */
+function drawCheckbox(page: PDFPage, cx: number, cy: number, boxSize = 6.8) {
+  const r = boxSize / 2 - 0.6;
   const color = rgb(0.88, 0.11, 0.18);
+  const thickness = boxSize >= 6.5 ? 1.4 : 1.1;
   page.drawLine({
     start: { x: cx - r, y: cy - r },
     end: { x: cx + r, y: cy + r },
-    thickness: 1.4,
+    thickness,
     color,
   });
   page.drawLine({
     start: { x: cx - r, y: cy + r },
     end: { x: cx + r, y: cy - r },
-    thickness: 1.4,
+    thickness,
     color,
   });
 }
@@ -485,21 +549,38 @@ function drawCheckboxes(
 ) {
   const { a, b } = computeCheckboxes(state);
   for (let i = 1; i <= 17; i++) {
-    const baselineY = CHECKBOX_ROW_Y[i];
-    // Box-midden ligt ~3pt boven baseline van het rij-cijfer.
-    const cy = baselineY + 3;
+    // CHECKBOX_ROW_Y bevat al het verticale midden van het vakje.
+    const cy = CHECKBOX_ROW_Y[i];
     if (a.has(i)) drawCheckbox(page, CHECKBOX_COLUMN.aBoxCenterX, cy);
     if (b.has(i)) drawCheckbox(page, CHECKBOX_COLUMN.bBoxCenterX, cy);
   }
   // Totaal aantal aangekruiste vakjes (rubriek "Vermeld het aantal aangekruiste
-  // vakjes" — kleine rechthoekjes onderaan kolom 12).
-  drawText(page, String(a.size), CHECKBOX_COLUMN.totalAX, CHECKBOX_COLUMN.totalAY, {
+  // vakjes"): twee kleine vakjes onder de toedrachtkolom. We centreren het
+  // cijfer horizontaal en verticaal in elk vakje.
+  drawCenteredNumber(page, font, a.size, CHECKBOX_COLUMN.totalABoxCx, CHECKBOX_COLUMN.totalBoxCy);
+  drawCenteredNumber(page, font, b.size, CHECKBOX_COLUMN.totalBBoxCx, CHECKBOX_COLUMN.totalBoxCy);
+}
+
+/** Teken een getal precies gecentreerd op (cx, cy) — voor kleine totalvakjes. */
+function drawCenteredNumber(
+  page: PDFPage,
+  font: PDFFont,
+  value: number,
+  cx: number,
+  cy: number,
+  size = 10,
+) {
+  const text = String(value);
+  const w = font.widthOfTextAtSize(text, size);
+  // Approximatie van het verticale midden van een Helvetica-cijfer: cap-height
+  // ≈ 0.72 × fontSize, dus baseline ligt ~0.36 × fontSize onder het midden.
+  const baselineOffset = size * 0.36;
+  page.drawText(text, {
+    x: cx - w / 2,
+    y: cy - baselineOffset,
     font,
-    size: 10,
-  });
-  drawText(page, String(b.size), CHECKBOX_COLUMN.totalBX, CHECKBOX_COLUMN.totalBY, {
-    font,
-    size: 10,
+    size,
+    color: rgb(0.88, 0.11, 0.18),
   });
 }
 
@@ -545,7 +626,6 @@ type ColLayout = {
   };
   notes: { lines: readonly PointWithWidth[] };
   signature: { x: number; y: number; w: number; h: number };
-  impact: { x: number; y: number; w: number; h: number };
 };
 
 function fillPartyBlock(
@@ -570,12 +650,13 @@ function fillPartyBlock(
     col.policyholder.voornaam.y,
     { font, size: 9 },
   );
-  // Adres: straat + huisnr + bus + stad (op één lijn). Truncen i.p.v.
-  // auto-wrap zodat we niet op een onvoorspelbare regel terechtkomen.
-  const polAddress = truncate(addressLine(p.adres), 58);
+  // Adres-veld bevat alleen straat + huisnr + bus. Postcode en stad worden
+  // apart in hun eigen veld (postcode) en de adres-regel afzonderlijk
+  // weergegeven om duplicatie te vermijden.
+  const polStreet = truncate(streetLine(p.adres), 60);
   drawText(
     page,
-    polAddress,
+    polStreet,
     col.policyholder.adres.x,
     col.policyholder.adres.y,
     { font, size: 8.5 },
@@ -733,34 +814,59 @@ async function renderCoverSheet(
   font: PDFFont,
   bold: PDFFont,
   state: AccidentReportState,
-): Promise<PDFPage> {
-  const page = pdfDoc.insertPage(0, [595.3, 841.9]);
-
+): Promise<{ page: PDFPage; pageCount: number }> {
   const margin = 40;
   const contentWidth = 595.3 - margin * 2;
+  // Voetnootregio: 60pt onderaan blijft vrij voor de generieke footer.
+  const FOOTER_RESERVED = 60;
+  const PAGE_TOP_AFTER_HEADER = 770;
+
+  let coverPageCount = 0;
+  let page = pdfDoc.insertPage(0, [595.3, 841.9]);
+  coverPageCount += 1;
   let y = 800;
 
-  // Kop
-  page.drawRectangle({
-    x: 0,
-    y: 790,
-    width: 595.3,
-    height: 52,
-    color: rgb(0.153, 0.6, 0.84), // #2799D7
-  });
-  drawText(page, "EUROPEES AANRIJDINGSFORMULIER", margin, 820, {
-    font: bold,
-    size: 14,
-    color: rgb(1, 1, 1),
-  });
-  drawText(page, "Samenvatting van de aangifte", margin, 802, {
-    font,
-    size: 10,
-    color: rgb(1, 1, 1),
-  });
-  y = 770;
+  /** Tekent de blauwe header bovenaan een coversheetpagina. */
+  function drawHeader(p: PDFPage, isFirst: boolean) {
+    p.drawRectangle({
+      x: 0,
+      y: 790,
+      width: 595.3,
+      height: 52,
+      color: rgb(0.153, 0.6, 0.84),
+    });
+    drawText(p, "EUROPEES AANRIJDINGSFORMULIER", margin, 820, {
+      font: bold,
+      size: 14,
+      color: rgb(1, 1, 1),
+    });
+    drawText(
+      p,
+      isFirst ? "Samenvatting van de aangifte" : "Samenvatting (vervolg)",
+      margin,
+      802,
+      { font, size: 10, color: rgb(1, 1, 1) },
+    );
+  }
+
+  drawHeader(page, true);
+  y = PAGE_TOP_AFTER_HEADER;
+
+  /**
+   * Zorgt dat er minimaal `needed` pt verticale ruimte over is op de huidige
+   * pagina; zo niet, dan voegt het een nieuwe coversheetpagina toe en reset
+   * y naar de top.
+   */
+  function ensureSpace(needed: number) {
+    if (y - needed >= FOOTER_RESERVED) return;
+    page = pdfDoc.insertPage(coverPageCount, [595.3, 841.9]);
+    coverPageCount += 1;
+    drawHeader(page, false);
+    y = PAGE_TOP_AFTER_HEADER;
+  }
 
   const writeRow = (label: string, value: string) => {
+    ensureSpace(14);
     drawText(page, label, margin, y, { font, size: 9, color: rgb(0.4, 0.47, 0.54) });
     drawText(page, value || "—", margin + 130, y, {
       font: bold,
@@ -771,6 +877,8 @@ async function renderCoverSheet(
   };
 
   const writeHeading = (title: string) => {
+    // Heading + minstens één regel content moeten samen op dezelfde pagina.
+    ensureSpace(40);
     y -= 6;
     page.drawRectangle({
       x: margin,
@@ -807,6 +915,7 @@ async function renderCoverSheet(
   const witnesses = state.getuigen?.trim() || "Geen getuigen opgegeven.";
   const witnessLines = wrapText(witnesses, 85, 4);
   for (const line of witnessLines) {
+    ensureSpace(12);
     drawText(page, line, margin + 6, y, { font, size: 9 });
     y -= 12;
   }
@@ -873,22 +982,63 @@ async function renderCoverSheet(
   if (state.circumstancesNotes?.trim()) {
     writeHeading("14. Opmerkingen");
     for (const line of wrapText(state.circumstancesNotes, 90, 6)) {
+      ensureSpace(12);
       drawText(page, line, margin + 6, y, { font, size: 9 });
       y -= 12;
     }
     y -= 4;
   }
 
-  /* 10. Raakpunt mini-grafiekjes naast elkaar. */
+  /* 10. Raakpunt voertuigen — toont de officiële EAB-silhouetten met een rode
+   * pijl op het door de gebruiker aangeduide raakpunt. */
+  // Box-afmetingen volgen de aspect ratio van de afbeelding (1024 x 797 ≈ 1.285).
+  const boxW = 220;
+  const boxH = Math.round((boxW * 797) / 1024);
+  const boxGap = 20;
+  // Heading + box + voertuig-labels + ademruimte = ~heading(20) + boxH + 30
+  ensureSpace(20 + boxH + 30);
   writeHeading("10. Raakpunt voertuigen");
-  const baseY = y - 70;
-  drawImpactBox(page, bold, margin + 60, baseY, 60, 70, state.impactPartyA, "A");
-  drawImpactBox(page, bold, margin + 200, baseY, 60, 70, state.impactPartyB, "B");
-  drawText(page, "Voertuig A", margin + 70, baseY - 12, { font, size: 9 });
-  drawText(page, "Voertuig B", margin + 210, baseY - 12, { font, size: 9 });
+  const totalW = boxW * 2 + boxGap;
+  const startX = margin + (contentWidth - totalW) / 2;
+  const baseY = y - boxH - 4;
+  const cachedImpact = await drawImpactBox(
+    page,
+    pdfDoc,
+    startX,
+    baseY,
+    boxW,
+    boxH,
+    state.impactPartyA,
+    "A",
+  );
+  await drawImpactBox(
+    page,
+    pdfDoc,
+    startX + boxW + boxGap,
+    baseY,
+    boxW,
+    boxH,
+    state.impactPartyB,
+    "B",
+    cachedImpact,
+  );
+  drawText(page, "Voertuig A", startX + boxW / 2 - 22, baseY - 12, {
+    font: bold,
+    size: 9,
+    color: rgb(0.15, 0.6, 0.84),
+  });
+  drawText(
+    page,
+    "Voertuig B",
+    startX + boxW + boxGap + boxW / 2 - 22,
+    baseY - 12,
+    { font: bold, size: 9, color: rgb(0.85, 0.64, 0.15) },
+  );
   y = baseY - 26;
 
   /* 15. Handtekeningen */
+  // Heading(20) + sig-blok(60) + lijn + labels(20) = ~110pt
+  ensureSpace(110);
   writeHeading("15. Handtekeningen bestuurders");
   const sigY = y - 60;
   await embedSignaturePng(
@@ -934,7 +1084,7 @@ async function renderCoverSheet(
     { font, size: 8, color: rgb(0.4, 0.47, 0.54), maxWidth: contentWidth },
   );
 
-  return page;
+  return { page, pageCount: coverPageCount };
 }
 
 /* ---------------------------------------------------------- authz */
@@ -1015,48 +1165,54 @@ export async function GET(
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // 1) Voeg een samenvattingsblad vooraan toe (index 0).
-    await renderCoverSheet(pdfDoc, font, bold, state);
+    // 1) Voeg een samenvattingsblad vooraan toe (kan meerdere pagina's beslaan
+    //    afhankelijk van hoeveel content de wizard heeft vergaard).
+    const cover = await renderCoverSheet(pdfDoc, font, bold, state);
 
-    // 2) Vul het officiële sjabloon in (nu page index 1 = originele page 0).
+    // 2) Vul het officiële sjabloon in (verschoven met het aantal cover-pages).
     const pages = pdfDoc.getPages();
-    const templatePage1 = pages[1];
+    const templatePage1 = pages[cover.pageCount];
 
-    // Sectie 1 — tijd/datum/plaats.
-    drawText(
-      templatePage1,
-      formatTimeForDisplay(state.location.tijd),
-      TEMPLATE_PAGE_1.time.x,
-      TEMPLATE_PAGE_1.time.y,
-      { font, size: 10 },
-    );
+    // Sectie 1 — datum/uur (op de rij ONDER het label) + plaats.
     drawText(
       templatePage1,
       formatDateForDisplay(state.location.datum),
       TEMPLATE_PAGE_1.date.x,
       TEMPLATE_PAGE_1.date.y,
-      { font, size: 10 },
+      { font, size: 9 },
     );
-    const placeFull = addressLine(state.location);
-    const placeLines = wrapText(placeFull, 42, 2);
-    if (placeLines[0]) {
-      drawText(
-        templatePage1,
-        placeLines[0],
-        TEMPLATE_PAGE_1.placeLine1.x,
-        TEMPLATE_PAGE_1.placeLine1.y,
-        { font, size: 9, maxWidth: TEMPLATE_PAGE_1.placeLine1.maxWidth },
-      );
-    }
-    if (placeLines[1]) {
-      drawText(
-        templatePage1,
-        placeLines[1],
-        TEMPLATE_PAGE_1.placeLine2.x,
-        TEMPLATE_PAGE_1.placeLine2.y,
-        { font, size: 9, maxWidth: TEMPLATE_PAGE_1.placeLine2.maxWidth },
-      );
-    }
+    drawText(
+      templatePage1,
+      formatTimeForDisplay(state.location.tijd),
+      TEMPLATE_PAGE_1.time.x,
+      TEMPLATE_PAGE_1.time.y,
+      { font, size: 9 },
+    );
+    // Plaats: regel 1 = straat (kort, 78pt), regel 2 = postcode + stad (108pt).
+    const street1 = streetLine({
+      straat: state.location.straat,
+      huisnummer: state.location.huisnummer,
+    });
+    const cityLine = [
+      safe(state.location.postcode),
+      safe(state.location.stad),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    drawText(
+      templatePage1,
+      truncate(street1, 32),
+      TEMPLATE_PAGE_1.placeLine1.x,
+      TEMPLATE_PAGE_1.placeLine1.y,
+      { font, size: 9 },
+    );
+    drawText(
+      templatePage1,
+      truncate(cityLine, 44),
+      TEMPLATE_PAGE_1.placeLine2.x,
+      TEMPLATE_PAGE_1.placeLine2.y,
+      { font, size: 9 },
+    );
     drawText(
       templatePage1,
       safe(state.location.land),
@@ -1072,7 +1228,7 @@ export async function GET(
         : state.gewonden === false
           ? TEMPLATE_PAGE_1.injuriesNo
           : null;
-    if (injuryPos) drawCheckbox(templatePage1, injuryPos.x, injuryPos.y);
+    if (injuryPos) drawCheckbox(templatePage1, injuryPos.x, injuryPos.y, 5.71);
 
     // Sectie 3/4 — materiële schade. Het officiële sjabloon stelt twee aparte
     // vragen ("andere voertuigen dan A en B" en "andere objecten dan
@@ -1086,8 +1242,8 @@ export async function GET(
       const o = isYes
         ? TEMPLATE_PAGE_1.damageOtherObjectsYes
         : TEMPLATE_PAGE_1.damageOtherObjectsNo;
-      drawCheckbox(templatePage1, v.x, v.y);
-      drawCheckbox(templatePage1, o.x, o.y);
+      drawCheckbox(templatePage1, v.x, v.y, 5.71);
+      drawCheckbox(templatePage1, o.x, o.y, 5.71);
     }
 
     // Sectie 5 — getuigen (max. 3 regels). Eerste regel is korter (deelt rij
@@ -1111,29 +1267,10 @@ export async function GET(
     fillPartyBlock(templatePage1, font, bold, state.partyA, COL_A);
     fillPartyBlock(templatePage1, font, bold, state.partyB, COL_B);
 
-    // Sectie 10 — raakpunt mini-indicator (in de strook die het vak van het
-    // officiële formulier benadert; als het niet exact overlapt komt het net
-    // eronder).
-    drawImpactBox(
-      templatePage1,
-      font,
-      COL_A.impact.x,
-      COL_A.impact.y,
-      COL_A.impact.w,
-      COL_A.impact.h,
-      state.impactPartyA,
-      "A",
-    );
-    drawImpactBox(
-      templatePage1,
-      font,
-      COL_B.impact.x,
-      COL_B.impact.y,
-      COL_B.impact.w,
-      COL_B.impact.h,
-      state.impactPartyB,
-      "B",
-    );
+    // Sectie 10 (raakpunt) wordt op het officiële sjabloon NIET overgetekend:
+    // het sjabloon bevat al schematische voertuigen waar de gebruiker zelf de
+    // pijl tekent. Onze raakpuntdata wordt enkel op het samenvattingsblad
+    // afgebeeld (zie renderCoverSheet).
 
     // Sectie 12 — 17 vakjes toedracht.
     drawCheckboxes(templatePage1, bold, state);

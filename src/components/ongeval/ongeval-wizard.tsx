@@ -9,6 +9,7 @@ import {
   Building2,
   Car,
   ChevronRight,
+  Download,
   DoorOpen,
   FilePenLine,
   GitBranch,
@@ -3088,8 +3089,9 @@ function PdfPreviewStep({
           type="button"
           disabled={!pdfUrl}
           onClick={download}
-          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white hover:bg-[#1e7bb0] disabled:opacity-50"
+          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2389C4] text-[15px] font-semibold text-white shadow-[0_4px_14px_rgba(35,137,196,0.25)] hover:bg-[#1e7bb0] active:bg-[#1a6a9a] disabled:opacity-50 disabled:shadow-none"
         >
+          <Download aria-hidden="true" />
           {t(lang, "complete.download")}
         </Button>
       </div>

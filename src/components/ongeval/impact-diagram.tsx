@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import Image from "next/image";
 import type { ImpactPoint } from "@/types/ongeval";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +9,7 @@ type ImpactDiagramProps = {
   label: string;
   value: ImpactPoint | null;
   onChange: (p: ImpactPoint) => void;
+  /** Behouden voor compat — niet meer gebruikt voor styling. */
   party: "A" | "B";
   readOnly?: boolean;
   /** Hulptekst onder het diagram — al vertaald aangeleverd. */
@@ -15,9 +17,10 @@ type ImpactDiagramProps = {
 };
 
 /**
- * Top-down silhouet van een auto om het raakpunt aan te duiden. Waarde wordt
- * genormaliseerd (0–1) opgeslagen zodat de marker ook klopt bij een andere
- * container-grootte (bv. in het overzicht).
+ * Voertuigselectie + raakpunt: toont de drie standaard EAB-silhouetten (motor,
+ * auto, vrachtwagen) zodat de gebruiker tikt op het type voertuig én de exacte
+ * impactzone. Coördinaten worden genormaliseerd (0–1) opgeslagen, zodat de
+ * marker correct schaalt in het overzicht én gestempeld kan worden op de PDF.
  */
 export function ImpactDiagram({
   label,
@@ -67,20 +70,10 @@ export function ImpactDiagram({
     }
   };
 
-  // Kleurpalet per partij. Body, ruiten en accenten.
-  const palette = party === "A"
-    ? {
-        body: "#2E7FD6", // helderblauw
-        bodyDark: "#1C5FA8",
-        glass: "#BDE1FB",
-        accent: "#FFFFFF",
-      }
-    : {
-        body: "#F7C948", // warmgeel
-        bodyDark: "#C69413",
-        glass: "#FDF1C6",
-        accent: "#1A1A1A",
-      };
+  // De afbeelding bevat in volgorde: motor, auto, vrachtwagen. We tonen de
+  // gekleurde rand rond het diagram in de partij-kleur zodat het visueel
+  // onderscheidbaar blijft welke partij dit is.
+  const accent = party === "A" ? "#2799D7" : "#D9A227";
 
   return (
     <div className={cn("flex flex-col items-center gap-3", !readOnly && "px-4 py-4") }>
@@ -92,72 +85,31 @@ export function ImpactDiagram({
       <div
         ref={boxRef}
         className={cn(
-          "relative aspect-[3/5] w-full touch-none select-none rounded-2xl border border-[#2799D7]/10 p-2 shadow-[0_2px_16px_rgba(39,153,215,0.08)]",
+          "relative aspect-[1024/797] w-full touch-none select-none overflow-hidden rounded-2xl border bg-white",
           readOnly
-            ? "max-w-[160px] bg-white"
-            : "max-w-[280px] cursor-crosshair bg-gradient-to-b from-[#F7F9FC] to-white p-4",
+            ? "max-w-[220px] shadow-[0_1px_4px_rgba(11,20,26,0.08)]"
+            : "max-w-[420px] cursor-crosshair shadow-[0_2px_16px_rgba(39,153,215,0.12)]",
         )}
+        style={{ borderColor: `${accent}55` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         role="img"
-        aria-label={readOnly ? "Raakpunt overzicht" : "Raakpunt op het voertuig aanduiden"}
+        aria-label={
+          readOnly
+            ? "Raakpunt overzicht"
+            : "Tik op het voertuig en de zone waar de aanrijding plaatsvond"
+        }
       >
-        <svg
-          viewBox="0 0 100 180"
-          className="pointer-events-none h-full w-full drop-shadow-sm"
-          aria-hidden
-        >
-          <defs>
-            <linearGradient id={`carBody-${party}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={palette.body} />
-              <stop offset="100%" stopColor={palette.bodyDark} />
-            </linearGradient>
-          </defs>
-          {/* Body — getekend als silhouet met neusjes en afgeronde kont. */}
-          <path
-            d="M50 4
-               C 30 4, 20 14, 18 30
-               L 18 150
-               C 20 166, 30 176, 50 176
-               C 70 176, 80 166, 82 150
-               L 82 30
-               C 80 14, 70 4, 50 4 Z"
-            fill={`url(#carBody-${party})`}
-            stroke={palette.bodyDark}
-            strokeWidth="1"
-          />
-          {/* Voorruit */}
-          <path
-            d="M28 30 L 72 30 L 68 54 L 32 54 Z"
-            fill={palette.glass}
-            opacity={0.85}
-          />
-          {/* Achterruit */}
-          <path
-            d="M32 126 L 68 126 L 72 150 L 28 150 Z"
-            fill={palette.glass}
-            opacity={0.85}
-          />
-          {/* Motorkap-accent */}
-          <rect x="30" y="10" width="40" height="6" rx="2" fill={palette.bodyDark} opacity={0.35} />
-          {/* Dak */}
-          <rect x="34" y="56" width="32" height="68" rx="4" fill={palette.accent} opacity={0.15} />
-          {/* Zijspiegels */}
-          <circle cx="18" cy="40" r="4" fill={palette.bodyDark} />
-          <circle cx="82" cy="40" r="4" fill={palette.bodyDark} />
-          {/* Wielen */}
-          <rect x="12" y="36" width="10" height="22" rx="3" fill="#222" />
-          <rect x="78" y="36" width="10" height="22" rx="3" fill="#222" />
-          <rect x="12" y="122" width="10" height="22" rx="3" fill="#222" />
-          <rect x="78" y="122" width="10" height="22" rx="3" fill="#222" />
-          {/* Koplampen & achterlichten */}
-          <rect x="26" y="8" width="10" height="4" rx="1" fill="#FFF7C0" />
-          <rect x="64" y="8" width="10" height="4" rx="1" fill="#FFF7C0" />
-          <rect x="26" y="168" width="10" height="4" rx="1" fill="#C43838" />
-          <rect x="64" y="168" width="10" height="4" rx="1" fill="#C43838" />
-        </svg>
+        <Image
+          src="/impact-vehicles.png"
+          alt=""
+          fill
+          sizes="(max-width: 768px) 100vw, 420px"
+          className="pointer-events-none object-contain p-2"
+          priority={!readOnly}
+        />
         {value ? (
           <div
             className="pointer-events-none absolute"
@@ -167,19 +119,18 @@ export function ImpactDiagram({
               transform: "translate(-50%, -100%)",
             }}
           >
-            <svg width="34" height="46" viewBox="0 0 34 46" aria-hidden>
+            <svg width="36" height="50" viewBox="0 0 36 50" aria-hidden>
               <defs>
                 <filter id={`arrowShadow-${party}`} x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodColor="#000" floodOpacity="0.35" />
+                  <feDropShadow dx="0" dy="1" stdDeviation="1.4" floodColor="#000" floodOpacity="0.4" />
                 </filter>
               </defs>
               <g filter={`url(#arrowShadow-${party})`}>
-                {/* Rode, duidelijk richtinggevoelige pijl die naar het raakpunt wijst. */}
                 <path
-                  d="M17 46 L 7 26 L 13 26 L 13 2 L 21 2 L 21 26 L 27 26 Z"
+                  d="M18 50 L 6 26 L 13 26 L 13 2 L 23 2 L 23 26 L 30 26 Z"
                   fill="#E11D2E"
                   stroke="#7A0A15"
-                  strokeWidth="1"
+                  strokeWidth="1.2"
                   strokeLinejoin="round"
                 />
               </g>
@@ -188,9 +139,9 @@ export function ImpactDiagram({
         ) : null}
       </div>
       {!readOnly ? (
-        <p className="max-w-sm text-center text-[13px] leading-snug text-[#5F7382]">
+        <p className="max-w-md text-center text-[13px] leading-snug text-[#5F7382]">
           {hint ??
-            "Tik of sleep om het raakpunt aan te duiden. De rode pijl wijst naar de eerste contactzone."}
+            "Kies het voertuigtype (motor, auto of vrachtwagen) en tik of sleep om aan te duiden waar je voertuig werd geraakt. De rode pijl wijst naar de eerste contactzone."}
         </p>
       ) : null}
     </div>
