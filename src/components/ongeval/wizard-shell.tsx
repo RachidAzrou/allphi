@@ -8,7 +8,8 @@ import {
 import { cn } from "@/lib/utils";
 import { InfoBanner } from "@/components/ongeval/info-banner";
 import type { OngevalStepId } from "@/types/ongeval";
-import { getProgressForStep, getStepTitle } from "@/lib/ongeval/engine";
+import { getProgressForStep } from "@/lib/ongeval/engine";
+import { getStepTitleLocalized, type OngevalLang } from "@/lib/ongeval/i18n";
 
 type WizardShellProps = {
   stepId: OngevalStepId;
@@ -22,6 +23,10 @@ type WizardShellProps = {
   onExit: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Effectieve UI-taal (B kiest een taal; anders NL). */
+  lang?: OngevalLang;
+  /** "Stap X van Y" label, i18n; default NL. */
+  stepLabel?: (step: number, total: number) => string;
 };
 
 export function WizardShell({
@@ -35,9 +40,21 @@ export function WizardShell({
   onExit,
   children,
   footer,
+  lang = "nl",
+  stepLabel,
 }: WizardShellProps) {
   const { step, total, fraction } = getProgressForStep(stepId);
-  const title = getStepTitle(stepId);
+  const title = getStepTitleLocalized(stepId, lang);
+  const progressText = stepLabel
+    ? stepLabel(step, total)
+    : lang === "fr"
+      ? `Étape ${step} sur ${total}`
+      : lang === "en"
+        ? `Step ${step} of ${total}`
+        : `Stap ${step} van ${total}`;
+  const backAria = lang === "fr" ? "Retour" : lang === "en" ? "Back" : "Terug";
+  const exitAria =
+    lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "Afsluiten";
   const showBanner = Boolean(
     bannerMessage && !bannerDismissed && onDismissBanner,
   );
@@ -56,7 +73,7 @@ export function WizardShell({
               type="button"
               onClick={onBack}
               className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-white/12 active:bg-white/18"
-              aria-label="Terug"
+              aria-label={backAria}
             >
               <ArrowLeft className="size-6" strokeWidth={1.75} />
             </button>
@@ -70,7 +87,7 @@ export function WizardShell({
             type="button"
             onClick={onExit}
             className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-white/12 active:bg-white/18"
-            aria-label="Afsluiten"
+            aria-label={exitAria}
           >
             <LogOut className="size-5" strokeWidth={1.75} />
           </button>
@@ -82,7 +99,7 @@ export function WizardShell({
           />
         </div>
         <p className="px-3 pb-2.5 text-right text-[11px] font-medium tabular-nums tracking-wide text-white/85">
-          Stap {step} van {total}
+          {progressText}
         </p>
       </header>
 

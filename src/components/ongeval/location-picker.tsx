@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Locate, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { t, type OngevalLang } from "@/lib/ongeval/i18n";
 
 type LocationValue = {
   straat: string;
@@ -15,6 +16,7 @@ type LocationValue = {
 type LocationPickerProps = {
   value: LocationValue;
   onChange: (next: LocationValue) => void;
+  lang?: OngevalLang;
 };
 
 type NominatimAddress = {
@@ -76,13 +78,14 @@ function mapAddress(addr: NominatimAddress | undefined): LocationValue {
  * Nominatim verplicht fair-use: 1 req/s, User-Agent/Referrer en debounce. We
  * sturen `accept-language=nl` en respecteren de debounce van 450 ms.
  */
-export function LocationPicker({ value, onChange }: LocationPickerProps) {
+export function LocationPicker({ value, onChange, lang = "nl" }: LocationPickerProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestQueryRef = useRef("");
+  const acceptLang = lang === "fr" ? "fr" : lang === "en" ? "en" : "nl";
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -95,7 +98,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=nl&q=${encodeURIComponent(trimmed)}`,
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&accept-language=${acceptLang}&q=${encodeURIComponent(trimmed)}`,
           { headers: { "Accept": "application/json" } },
         );
         if (!res.ok) throw new Error("search_failed");
@@ -110,11 +113,11 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       }
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, acceptLang]);
 
   const useCurrentLocation = () => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      setError("Geolocatie niet beschikbaar in deze browser.");
+      setError(t(lang, "location.picker.unavailable"));
       return;
     }
     setLocating(true);
@@ -123,14 +126,14 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       async (pos) => {
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=nl&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`,
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=${acceptLang}&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`,
           );
           if (!res.ok) throw new Error("reverse_failed");
           const data = (await res.json()) as NominatimResult;
           const mapped = mapAddress(data.address);
           onChange({ ...value, ...mapped });
         } catch {
-          setError("Adres ophalen mislukt. Vul handmatig in.");
+          setError(t(lang, "location.picker.geocode_failed"));
         } finally {
           setLocating(false);
         }
@@ -138,9 +141,9 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       (err) => {
         setLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setError("Toegang tot locatie geweigerd.");
+          setError(t(lang, "location.picker.permission_denied"));
         } else {
-          setError("Locatie bepalen mislukt.");
+          setError(t(lang, "location.picker.locate_failed"));
         }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
@@ -163,7 +166,9 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#2799D7]/25 bg-white px-3 text-[14px] font-semibold text-[#2799D7] shadow-sm transition-colors hover:bg-[#E8F4FB] disabled:opacity-50"
       >
         <Locate className="size-4" strokeWidth={2} />
-        {locating ? "Locatie bepalen…" : "Gebruik huidige locatie"}
+        {locating
+          ? t(lang, "location.picker.locating")
+          : t(lang, "location.picker.use_current")}
       </button>
       <div className="relative">
         <div className="flex items-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3">
@@ -171,7 +176,7 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Zoek adres (straat, stad, …)"
+            placeholder={t(lang, "location.picker.search_placeholder")}
             className="h-11 flex-1 border-0 bg-transparent px-0 text-[14px] shadow-none focus-visible:ring-0"
           />
         </div>
@@ -193,7 +198,9 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
           </div>
         ) : null}
         {searching ? (
-          <p className="mt-1 text-[11px] text-[#5F7382]">Zoeken…</p>
+          <p className="mt-1 text-[11px] text-[#5F7382]">
+            {t(lang, "location.picker.searching")}
+          </p>
         ) : null}
       </div>
       {error ? (

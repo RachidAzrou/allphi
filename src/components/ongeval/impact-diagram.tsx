@@ -10,6 +10,8 @@ type ImpactDiagramProps = {
   onChange: (p: ImpactPoint) => void;
   party: "A" | "B";
   readOnly?: boolean;
+  /** Hulptekst onder het diagram — al vertaald aangeleverd. */
+  hint?: string;
 };
 
 /**
@@ -23,6 +25,7 @@ export function ImpactDiagram({
   onChange,
   party,
   readOnly = false,
+  hint,
 }: ImpactDiagramProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -186,8 +189,8 @@ export function ImpactDiagram({
       </div>
       {!readOnly ? (
         <p className="max-w-sm text-center text-[13px] leading-snug text-[#5F7382]">
-          Tik of sleep om het raakpunt aan te duiden. De rode pijl wijst naar
-          de eerste contactzone.
+          {hint ??
+            "Tik of sleep om het raakpunt aan te duiden. De rode pijl wijst naar de eerste contactzone."}
         </p>
       ) : null}
     </div>

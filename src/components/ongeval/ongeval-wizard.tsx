@@ -48,6 +48,14 @@ import {
 } from "@/lib/ongeval/engine";
 import { toIsoDate } from "@/lib/ongeval/date-utils";
 import {
+  getCategoryDescription,
+  getCategoryLabel,
+  getDetailLabel,
+  resolveLang,
+  t,
+  type OngevalLang,
+} from "@/lib/ongeval/i18n";
+import {
   CENTER_LINE_OPTIONS,
   GENERIC_SINGLE,
   LANE_CHANGE_OPTIONS,
@@ -56,9 +64,6 @@ import {
   PRIORITY_OPTIONS,
   REAR_END_OPTIONS,
   SITUATION_CATEGORIES,
-  getSituationCategoryLabel,
-  getSituationDetailLabel,
-  getManeuverLabel,
 } from "@/lib/ongeval/situations";
 import { formatDateForDisplay, formatTimeForDisplay } from "@/lib/ongeval/date-utils";
 import type {
@@ -135,8 +140,22 @@ export function OngevalWizard({
   const [partyBJoinedAt, setPartyBJoinedAt] = useState<string | null>(null);
 
   const stepId = state.currentStepId;
+  const lang: OngevalLang = resolveLang(
+    state.role,
+    state.partyBLanguage as OngevalLang | null,
+  );
   const bannerKey = `banner_${stepId}`;
-  const bannerMessage = STEP_BANNERS[stepId];
+  // Vertaalde banner-tekst (val terug op NL indien key niet bestaat).
+  const bannerKeyByStep: Partial<Record<OngevalStepId, string>> = {
+    signature_a: "banner.signature",
+    signature_b: "banner.signature",
+    vehicle_contact: "banner.vehicle_contact",
+    proposal_intro: "banner.proposal_intro",
+  };
+  const bannerMessageI18nKey = bannerKeyByStep[stepId];
+  const bannerMessage = bannerMessageI18nKey
+    ? t(lang, bannerMessageI18nKey)
+    : STEP_BANNERS[stepId];
   const bannerDismissed = state.dismissedBanners[bannerKey] === true;
 
   const persist = useCallback(
@@ -656,17 +675,16 @@ export function OngevalWizard({
       <div className="flex flex-col gap-6 px-4 py-6">
         <div className="rounded-2xl border border-[#2799D7]/12 bg-gradient-to-br from-[#F7F9FC] to-white px-4 py-4 shadow-sm">
           <p className="text-[14px] leading-relaxed text-[#5F7382]">
-            Vul enkel de gegevens in die je zeker weet. Je kunt dit later nog
-            aanvullen in het overzicht.
+            {t(lang, "party_b_form.intro")}
           </p>
         </div>
 
         <section className="flex flex-col gap-3">
           <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
-            Verzekeringsnemer / verzekerde (partij B)
+            {t(lang, "party_b_form.section.policyholder")}
           </h3>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Voornaam">
+            <Field label={t(lang, "field.firstname")}>
               <Input
                 value={p.verzekeringsnemer.voornaam}
                 onChange={(e) =>
@@ -682,7 +700,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Naam">
+            <Field label={t(lang, "field.lastname")}>
               <Input
                 value={p.verzekeringsnemer.naam}
                 onChange={(e) =>
@@ -699,7 +717,7 @@ export function OngevalWizard({
               />
             </Field>
           </div>
-          <Field label="Straat">
+          <Field label={t(lang, "field.street")}>
             <Input
               value={p.verzekeringsnemer.adres.straat}
               onChange={(e) =>
@@ -716,7 +734,7 @@ export function OngevalWizard({
             />
           </Field>
           <div className="grid grid-cols-3 gap-2">
-            <Field label="Huisnr.">
+            <Field label={t(lang, "field.housenumber")}>
               <Input
                 value={p.verzekeringsnemer.adres.huisnummer}
                 onChange={(e) =>
@@ -732,7 +750,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Bus">
+            <Field label={t(lang, "field.box")}>
               <Input
                 value={p.verzekeringsnemer.adres.bus}
                 onChange={(e) =>
@@ -748,7 +766,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Postcode">
+            <Field label={t(lang, "field.postcode")}>
               <Input
                 value={p.verzekeringsnemer.adres.postcode}
                 onChange={(e) =>
@@ -766,7 +784,7 @@ export function OngevalWizard({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Stad">
+            <Field label={t(lang, "field.city")}>
               <Input
                 value={p.verzekeringsnemer.adres.stad}
                 onChange={(e) =>
@@ -782,7 +800,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Land">
+            <Field label={t(lang, "field.country")}>
               <Input
                 value={p.verzekeringsnemer.adres.land}
                 onChange={(e) =>
@@ -803,9 +821,9 @@ export function OngevalWizard({
 
         <section className="flex flex-col gap-3">
           <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
-            Verzekering (partij B)
+            {t(lang, "party_b_form.section.insurance")}
           </h3>
-          <Field label="Verzekeringsmaatschappij">
+          <Field label={t(lang, "field.insurance_company")}>
             <Input
               value={p.verzekering.maatschappij}
               onChange={(e) =>
@@ -818,7 +836,7 @@ export function OngevalWizard({
               }
             />
           </Field>
-          <Field label="Polisnummer">
+          <Field label={t(lang, "field.policy_number")}>
             <Input
               value={p.verzekering.polisnummer}
               onChange={(e) =>
@@ -835,9 +853,9 @@ export function OngevalWizard({
 
         <section className="flex flex-col gap-3">
           <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
-            Voertuig (partij B)
+            {t(lang, "party_b_form.section.vehicle")}
           </h3>
-          <Field label="Merk & model">
+          <Field label={t(lang, "field.make_model")}>
             <Input
               value={p.voertuig.merkModel}
               onChange={(e) =>
@@ -848,7 +866,7 @@ export function OngevalWizard({
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Nummerplaat">
+            <Field label={t(lang, "field.plate")}>
               <Input
                 value={p.voertuig.nummerplaat}
                 onChange={(e) =>
@@ -861,7 +879,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Land van inschrijving">
+            <Field label={t(lang, "field.registration_country")}>
               <Input
                 value={p.voertuig.landInschrijving}
                 onChange={(e) =>
@@ -879,10 +897,10 @@ export function OngevalWizard({
 
         <section className="flex flex-col gap-3">
           <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
-            Bestuurder (partij B)
+            {t(lang, "party_b_form.section.driver")}
           </h3>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Voornaam">
+            <Field label={t(lang, "field.firstname")}>
               <Input
                 value={p.bestuurder.voornaam}
                 onChange={(e) =>
@@ -895,7 +913,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Naam">
+            <Field label={t(lang, "field.lastname")}>
               <Input
                 value={p.bestuurder.naam}
                 onChange={(e) =>
@@ -909,7 +927,7 @@ export function OngevalWizard({
               />
             </Field>
           </div>
-          <Field label="Geboortedatum">
+          <Field label={t(lang, "field.birthdate")}>
             <Input
               type="date"
               value={p.bestuurder.geboortedatum}
@@ -923,7 +941,7 @@ export function OngevalWizard({
               }
             />
           </Field>
-          <Field label="Rijbewijsnummer">
+          <Field label={t(lang, "field.license_number")}>
             <Input
               value={p.bestuurder.rijbewijsNummer}
               onChange={(e) =>
@@ -939,7 +957,7 @@ export function OngevalWizard({
               }
             />
           </Field>
-          <Field label="Straat">
+          <Field label={t(lang, "field.street")}>
             <Input
               value={p.bestuurder.adres.straat}
               onChange={(e) =>
@@ -956,7 +974,7 @@ export function OngevalWizard({
             />
           </Field>
           <div className="grid grid-cols-3 gap-2">
-            <Field label="Huisnr.">
+            <Field label={t(lang, "field.housenumber")}>
               <Input
                 value={p.bestuurder.adres.huisnummer}
                 onChange={(e) =>
@@ -972,7 +990,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Postcode">
+            <Field label={t(lang, "field.postcode")}>
               <Input
                 value={p.bestuurder.adres.postcode}
                 onChange={(e) =>
@@ -988,7 +1006,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Stad">
+            <Field label={t(lang, "field.city")}>
               <Input
                 value={p.bestuurder.adres.stad}
                 onChange={(e) =>
@@ -1005,7 +1023,7 @@ export function OngevalWizard({
               />
             </Field>
           </div>
-          <Field label="Land">
+          <Field label={t(lang, "field.country")}>
             <Input
               value={p.bestuurder.adres.land}
               onChange={(e) =>
@@ -1900,6 +1918,7 @@ export function OngevalWizard({
         return (
           <div className="flex flex-col gap-3 px-4 py-4">
             <LocationPicker
+              lang={lang}
               value={{
                 straat: state.location.straat,
                 huisnummer: state.location.huisnummer,
@@ -1920,7 +1939,7 @@ export function OngevalWizard({
                 })
               }
             />
-            <Field label="Straat">
+            <Field label={t(lang, "field.street")}>
               <Input
                 value={state.location.straat}
                 onChange={(e) =>
@@ -1930,7 +1949,7 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Huisnummer">
+            <Field label={t(lang, "field.housenumber")}>
               <Input
                 value={state.location.huisnummer}
                 onChange={(e) =>
@@ -1941,7 +1960,7 @@ export function OngevalWizard({
               />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Postcode">
+              <Field label={t(lang, "field.postcode")}>
                 <Input
                   value={state.location.postcode}
                   onChange={(e) =>
@@ -1951,7 +1970,7 @@ export function OngevalWizard({
                   }
                 />
               </Field>
-              <Field label="Stad">
+              <Field label={t(lang, "field.city")}>
                 <Input
                   value={state.location.stad}
                   onChange={(e) =>
@@ -1962,7 +1981,7 @@ export function OngevalWizard({
                 />
               </Field>
             </div>
-            <Field label="Land">
+            <Field label={t(lang, "field.country")}>
               <Input
                 value={state.location.land}
                 onChange={(e) =>
@@ -1973,7 +1992,7 @@ export function OngevalWizard({
               />
             </Field>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Datum">
+              <Field label={t(lang, "field.date")}>
                 <Input
                   type="date"
                   value={state.location.datum}
@@ -1984,7 +2003,7 @@ export function OngevalWizard({
                   }
                 />
               </Field>
-              <Field label="Uur">
+              <Field label={t(lang, "field.time")}>
                 <Input
                   type="time"
                   value={state.location.tijd}
@@ -2002,27 +2021,33 @@ export function OngevalWizard({
         return (
           <div className="flex flex-col gap-6 px-4 py-8">
             <YesNoBlock
-              label="Zijn er gewonden?"
+              label={t(lang, "injuries.question")}
               value={state.gewonden}
               onChange={(v) => updateState({ gewonden: v })}
+              lang={lang}
             />
             <YesNoBlock
-              label="Is er materiële schade aan andere voorwerpen dan de voertuigen A en B?"
+              label={t(lang, "material.question")}
               value={state.materieleSchadeAnders}
               onChange={(v) => updateState({ materieleSchadeAnders: v })}
+              lang={lang}
             />
           </div>
         );
       case "witnesses":
         return (
-          <div className="px-4 py-4">
-            <Field label="Getuigen (namen, contact) — optioneel">
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <Field label={t(lang, "overview.section.witnesses")}>
               <textarea
                 className="min-h-[120px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder={t(lang, "witnesses.placeholder")}
                 value={state.getuigen}
                 onChange={(e) => updateState({ getuigen: e.target.value })}
               />
             </Field>
+            <p className="text-[12px] text-[#5F7382]">
+              {t(lang, "witnesses.help")}
+            </p>
           </div>
         );
       case "situation_main":
@@ -2065,10 +2090,10 @@ export function OngevalWizard({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-heading text-[15px] font-semibold text-[#163247]">
-                      {cat.title}
+                      {getCategoryLabel(cat.id, lang) || cat.title}
                     </p>
                     <p className="mt-0.5 text-[13px] leading-snug text-[#5F7382]">
-                      {cat.description}
+                      {getCategoryDescription(cat.id, lang) || cat.description}
                     </p>
                   </div>
                   <ChevronRight className="mt-1 size-5 shrink-0 text-[#2799D7]/35" />
@@ -2080,6 +2105,7 @@ export function OngevalWizard({
       case "sit_rear_end":
         return (
           <OptionList
+            lang={lang}
             options={REAR_END_OPTIONS}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2088,6 +2114,7 @@ export function OngevalWizard({
       case "sit_center_line":
         return (
           <OptionList
+            lang={lang}
             options={CENTER_LINE_OPTIONS}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2096,6 +2123,7 @@ export function OngevalWizard({
       case "sit_priority":
         return (
           <OptionList
+            lang={lang}
             options={PRIORITY_OPTIONS}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2105,9 +2133,14 @@ export function OngevalWizard({
         return (
           <div>
             <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
-              Kies de rijbeweging van partij A
+              {lang === "fr"
+                ? "Choisissez la manœuvre de la partie A"
+                : lang === "en"
+                  ? "Choose the manoeuvre of party A"
+                  : "Kies de rijbeweging van partij A"}
             </p>
             <OptionList
+              lang={lang}
               options={MANEUVER_A_OPTIONS}
               selectedId={state.maneuverAKey}
               onSelect={(id) => updateState({ maneuverAKey: id })}
@@ -2118,9 +2151,14 @@ export function OngevalWizard({
         return (
           <div>
             <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
-              Kies de rijbeweging van partij B
+              {lang === "fr"
+                ? "Choisissez la manœuvre de la partie B"
+                : lang === "en"
+                  ? "Choose the manoeuvre of party B"
+                  : "Kies de rijbeweging van partij B"}
             </p>
             <OptionList
+              lang={lang}
               options={MANEUVER_B_OPTIONS}
               selectedId={state.maneuverBKey}
               onSelect={(id) => updateState({ maneuverBKey: id })}
@@ -2130,6 +2168,7 @@ export function OngevalWizard({
       case "sit_lane_change":
         return (
           <OptionList
+            lang={lang}
             options={LANE_CHANGE_OPTIONS}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2138,6 +2177,7 @@ export function OngevalWizard({
       case "sit_parking":
         return (
           <OptionList
+            lang={lang}
             options={GENERIC_SINGLE.parking ?? []}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2146,6 +2186,7 @@ export function OngevalWizard({
       case "sit_door":
         return (
           <OptionList
+            lang={lang}
             options={GENERIC_SINGLE.door ?? []}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2154,6 +2195,7 @@ export function OngevalWizard({
       case "sit_load":
         return (
           <OptionList
+            lang={lang}
             options={GENERIC_SINGLE.load ?? []}
             selectedId={state.situationDetailKey}
             onSelect={(id) => updateState({ situationDetailKey: id })}
@@ -2164,9 +2206,7 @@ export function OngevalWizard({
           <div className="px-4 py-8">
             <div className="mx-auto max-w-md rounded-2xl border border-[#2799D7]/12 bg-gradient-to-br from-[#F7F9FC] to-white px-4 py-6 shadow-sm">
               <p className="text-center text-[15px] leading-relaxed text-[#163247]">
-                Op basis van je antwoorden stellen we een voorstel van aangifte
-                op. Je kunt dit straks aanvaarden of verwerpen; bij verwerpen
-                vul je extra gegevens en een schets in.
+                {t(lang, "proposal.section_title")}
               </p>
             </div>
           </div>
@@ -2175,7 +2215,7 @@ export function OngevalWizard({
         return (
           <div className="flex flex-col gap-4 px-4 py-10">
             <p className="text-center text-[15px] text-[#163247]">
-              Aanvaard je dit voorstel van aangifte?
+              {t(lang, "proposal.question")}
             </p>
             <div className="flex justify-center gap-4">
               <button
@@ -2187,7 +2227,7 @@ export function OngevalWizard({
                     : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
                 }`}
               >
-                Ja
+                {t(lang, "common.yes")}
               </button>
               <button
                 type="button"
@@ -2198,7 +2238,7 @@ export function OngevalWizard({
                     : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
                 }`}
               >
-                Nee
+                {t(lang, "common.no")}
               </button>
             </div>
           </div>
@@ -2206,9 +2246,10 @@ export function OngevalWizard({
       case "circumstances_manual":
         return (
           <div className="px-4 py-4">
-            <Field label="Aanvullende omstandigheden en opmerkingen">
+            <Field label={t(lang, "circumstances.label")}>
               <textarea
                 className="min-h-[160px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder={t(lang, "circumstances.placeholder")}
                 value={state.circumstancesNotes}
                 onChange={(e) =>
                   updateState({ circumstancesNotes: e.target.value })
@@ -2221,7 +2262,7 @@ export function OngevalWizard({
         return (
           <div className="flex flex-col gap-8 px-4 py-10">
             <p className="text-center text-[16px] font-medium text-[#163247]">
-              Was er contact tussen de voertuigen?
+              {t(lang, "vehicle_contact.question")}
             </p>
             <div className="flex justify-center gap-4">
               <button
@@ -2233,7 +2274,7 @@ export function OngevalWizard({
                     : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
                 }`}
               >
-                Ja
+                {t(lang, "common.yes")}
               </button>
               <button
                 type="button"
@@ -2244,7 +2285,7 @@ export function OngevalWizard({
                     : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
                 }`}
               >
-                Nee
+                {t(lang, "common.no")}
               </button>
             </div>
           </div>
@@ -2252,7 +2293,8 @@ export function OngevalWizard({
       case "impact_party_a":
         return (
           <ImpactDiagram
-            label="Duid het raakpunt op voertuig A aan."
+            label={t(lang, "impact.a.label")}
+            hint={t(lang, "impact.hint")}
             party="A"
             value={state.impactPartyA}
             onChange={(impactPartyA) => updateState({ impactPartyA })}
@@ -2261,7 +2303,8 @@ export function OngevalWizard({
       case "impact_party_b":
         return (
           <ImpactDiagram
-            label="Duid het raakpunt op voertuig B aan."
+            label={t(lang, "impact.b.label")}
+            hint={t(lang, "impact.hint")}
             party="B"
             value={state.impactPartyB}
             onChange={(impactPartyB) => updateState({ impactPartyB })}
@@ -2271,19 +2314,33 @@ export function OngevalWizard({
         return (
           <div className="flex flex-col gap-6 px-4 py-10">
             <p className="text-center text-[15px] leading-relaxed text-[#163247]">
-              Dit is de laatste stap bij het opmaken van de ongevalsaangifte.
-              Gelieve alle ingevoerde gegevens na te kijken. Je kunt dit ook
-              overslaan.
+              {t(lang, "overview.intro")}
             </p>
           </div>
         );
       case "overview_detail":
-        return <OverviewTabs state={state} />;
+        return <OverviewTabs state={state} lang={lang} />;
       case "signature_a":
         return (
           <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
             <p className="text-[14px] leading-relaxed text-[#5F7382]">
-              Teken hieronder de handtekening van <strong className="font-semibold text-[#163247]">bestuurder A</strong>. Gebruik vinger of stylus.
+              {lang === "fr"
+                ? "Signez ci-dessous au nom du "
+                : lang === "en"
+                  ? "Sign below on behalf of "
+                  : "Teken hieronder de handtekening van "}
+              <strong className="font-semibold text-[#163247]">
+                {lang === "fr"
+                  ? "conducteur A"
+                  : lang === "en"
+                    ? "driver A"
+                    : "bestuurder A"}
+              </strong>
+              {lang === "fr"
+                ? ". Utilisez votre doigt ou un stylet."
+                : lang === "en"
+                  ? ". Use finger or stylus."
+                  : ". Gebruik vinger of stylus."}
             </p>
             <SignaturePad
               value={state.signaturePartyA}
@@ -2295,7 +2352,7 @@ export function OngevalWizard({
         return (
           <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
             <p className="text-[14px] leading-relaxed text-[#5F7382]">
-              Teken hieronder de handtekening van <strong className="font-semibold text-[#163247]">bestuurder B</strong>. Gebruik vinger of stylus.
+              {t(lang, "signature.b.prompt")}
             </p>
             <SignaturePad
               value={state.signaturePartyB}
@@ -2308,6 +2365,7 @@ export function OngevalWizard({
           <PdfPreviewStep
             reportId={reportId}
             guestSecret={guestSecret}
+            lang={lang}
           />
         );
       default:
@@ -2319,7 +2377,7 @@ export function OngevalWizard({
     if (stepId === "complete") {
       return (
         <WizardFooterButton
-          label="OK"
+          label={t(lang, "common.ok")}
           disabled={saving}
           onClick={async () => {
             try {
@@ -2362,9 +2420,9 @@ export function OngevalWizard({
               );
             }}
           >
-            Sla het overzicht over
+            {t(lang, "overview.skip")}
           </button>
-          <WizardFooterButton label="Volgende" onClick={goNext} />
+          <WizardFooterButton label={t(lang, "common.next")} onClick={goNext} />
         </div>
       );
     }
@@ -2377,7 +2435,11 @@ export function OngevalWizard({
       return (
         <div className="grid grid-cols-1">
           <WizardFooterButton
-            label={stepId.startsWith("signature") ? "Bevestigen" : "Volgende"}
+            label={
+              stepId.startsWith("signature")
+                ? t(lang, "common.confirm")
+                : t(lang, "common.next")
+            }
             onClick={goNext}
             disabled={!validateStep(stepId, state)}
           />
@@ -2399,7 +2461,7 @@ export function OngevalWizard({
     if (stepId === "share_qr" && state.role === "A") {
       return (
         <WizardFooterButton
-          label="Volgende"
+          label={t(lang, "common.next")}
           onClick={goNext}
           disabled={!partyBJoinedAt || saving}
         />
@@ -2407,7 +2469,7 @@ export function OngevalWizard({
     }
     return (
       <WizardFooterButton
-        label="Volgende"
+        label={t(lang, "common.next")}
         onClick={goNext}
         disabled={!validateStep(stepId, state) || saving}
       />
@@ -2420,6 +2482,7 @@ export function OngevalWizard({
     saving,
     supabase,
     reportId,
+    lang,
     onRequestClose,
     returnTo,
     partyBJoinedAt,
@@ -2437,6 +2500,7 @@ export function OngevalWizard({
         showBack={stepId !== "driver_select"}
         onExit={handleExit}
         footer={footer}
+        lang={lang}
       >
         <ScrollArea
           className={
@@ -2488,10 +2552,12 @@ function YesNoBlock({
   label,
   value,
   onChange,
+  lang = "nl",
 }: {
   label: string;
   value: boolean | null;
   onChange: (v: boolean) => void;
+  lang?: OngevalLang;
 }) {
   return (
     <div>
@@ -2508,7 +2574,7 @@ function YesNoBlock({
               : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
           }`}
         >
-          Ja
+          {t(lang, "common.yes")}
         </button>
         <button
           type="button"
@@ -2519,7 +2585,7 @@ function YesNoBlock({
               : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
           }`}
         >
-          Nee
+          {t(lang, "common.no")}
         </button>
       </div>
     </div>
@@ -2572,15 +2638,18 @@ function OptionList({
   options,
   selectedId,
   onSelect,
+  lang = "nl",
 }: {
   options: { id: string; title: string; description: string }[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  lang?: OngevalLang;
 }) {
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
       {options.map((o) => {
         const selected = selectedId === o.id;
+        const title = getDetailLabel(o.id, lang) || o.title;
         return (
           <button
             key={o.id}
@@ -2594,7 +2663,7 @@ function OptionList({
           >
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="font-heading text-[15px] font-semibold leading-tight text-[#163247]">
-                {o.title}
+                {title}
               </p>
               {o.description ? (
                 <p className="mt-1.5 text-[13px] leading-snug text-[#5F7382]">
@@ -2616,13 +2685,21 @@ function OptionList({
   );
 }
 
-function OverviewTabs({ state }: { state: AccidentReportState }) {
+function OverviewTabs({
+  state,
+  lang = "nl",
+}: {
+  state: AccidentReportState;
+  lang?: OngevalLang;
+}) {
   const [tab, setTab] = useState<
     "locatie" | "vragen" | "getuigen" | "gegevens" | "raakpunt"
   >("locatie");
   const loc = state.location;
+  const notFilled = t(lang, "common.not_filled");
+  const notSpecified = t(lang, "common.not_specified");
   const yesNo = (v: boolean | null) =>
-    v === null ? null : v ? "Ja" : "Nee";
+    v === null ? null : v ? t(lang, "common.yes") : t(lang, "common.no");
   const personLine = (p: {
     voornaam: string;
     naam: string;
@@ -2647,11 +2724,11 @@ function OverviewTabs({ state }: { state: AccidentReportState }) {
       <div className="flex overflow-x-auto border-b border-black/[0.08] bg-white px-2">
         {(
           [
-            ["locatie", "Locatie"],
-            ["vragen", "Vragen"],
-            ["raakpunt", "Raakpunt"],
-            ["getuigen", "Getuigen"],
-            ["gegevens", "Gegevens"],
+            ["locatie", t(lang, "overview.tab.location")],
+            ["vragen", t(lang, "overview.tab.questions")],
+            ["raakpunt", t(lang, "overview.tab.impact")],
+            ["getuigen", t(lang, "overview.tab.witnesses")],
+            ["gegevens", t(lang, "overview.tab.data")],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -2671,166 +2748,164 @@ function OverviewTabs({ state }: { state: AccidentReportState }) {
       <div className="flex-1 space-y-4 px-4 py-4">
         {tab === "locatie" ? (
           <>
-            <Section title="Plaats van het ongeval">
-              <Row label="Straat" value={loc.straat} />
-              <Row label="Huisnummer" value={loc.huisnummer} />
-              <Row label="Postcode" value={loc.postcode} />
-              <Row label="Stad" value={loc.stad} />
-              <Row label="Land" value={loc.land} />
+            <Section title={t(lang, "overview.section.place")}>
+              <Row label={t(lang, "field.street")} value={loc.straat} />
+              <Row label={t(lang, "field.housenumber")} value={loc.huisnummer} />
+              <Row label={t(lang, "field.postcode")} value={loc.postcode} />
+              <Row label={t(lang, "field.city")} value={loc.stad} />
+              <Row label={t(lang, "field.country")} value={loc.land} />
             </Section>
-            <Section title="Tijdstip">
-              <Row label="Datum" value={formatDateForDisplay(loc.datum)} />
-              <Row label="Uur" value={formatTimeForDisplay(loc.tijd)} />
+            <Section title={t(lang, "overview.section.time")}>
+              <Row label={t(lang, "field.date")} value={formatDateForDisplay(loc.datum)} />
+              <Row label={t(lang, "field.time")} value={formatTimeForDisplay(loc.tijd)} />
             </Section>
-            <Section title="Schade & letsels">
+            <Section title={t(lang, "overview.section.damage")}>
               <Row
-                label="Gewonden"
-                value={yesNo(state.gewonden) ?? "Niet opgegeven"}
+                label={t(lang, "overview.row.injuries")}
+                value={yesNo(state.gewonden) ?? notSpecified}
               />
               <Row
-                label="Andere materiële schade"
-                value={yesNo(state.materieleSchadeAnders) ?? "Niet opgegeven"}
+                label={t(lang, "overview.row.other_damage")}
+                value={yesNo(state.materieleSchadeAnders) ?? notSpecified}
               />
             </Section>
           </>
         ) : null}
         {tab === "vragen" ? (
           <>
-            <Section title="Type ongeval">
+            <Section title={t(lang, "overview.section.accident_type")}>
               <Row
-                label="Categorie"
+                label={t(lang, "overview.row.category")}
                 value={
-                  getSituationCategoryLabel(state.situationCategory) ||
-                  "Nog niet gekozen"
+                  getCategoryLabel(state.situationCategory, lang) ||
+                  t(lang, "overview.empty.category")
                 }
               />
               <Row
-                label="Detail"
+                label={t(lang, "overview.row.detail")}
                 value={
-                  getSituationDetailLabel(
-                    state.situationCategory,
-                    state.situationDetailKey,
-                  ) || "Geen detail"
+                  getDetailLabel(state.situationDetailKey, lang) ||
+                  t(lang, "overview.empty.detail")
                 }
               />
               {state.situationCategory === "maneuver" ? (
                 <>
                   <Row
-                    label="Manoeuvre A"
+                    label={t(lang, "overview.row.maneuver_a")}
                     value={
-                      getManeuverLabel("A", state.maneuverAKey) ||
-                      "Geen manoeuvre A"
+                      getDetailLabel(state.maneuverAKey, lang) ||
+                      t(lang, "overview.empty.maneuver_a")
                     }
                   />
                   <Row
-                    label="Manoeuvre B"
+                    label={t(lang, "overview.row.maneuver_b")}
                     value={
-                      getManeuverLabel("B", state.maneuverBKey) ||
-                      "Geen manoeuvre B"
+                      getDetailLabel(state.maneuverBKey, lang) ||
+                      t(lang, "overview.empty.maneuver_b")
                     }
                   />
                 </>
               ) : null}
             </Section>
-            <Section title="Minnelijk voorstel">
+            <Section title={t(lang, "overview.section.proposal")}>
               <Row
-                label="Voorstel aanvaard"
-                value={yesNo(state.proposalAccepted) ?? "Niet beslist"}
+                label={t(lang, "overview.row.proposal_accepted")}
+                value={yesNo(state.proposalAccepted) ?? t(lang, "overview.empty.proposal")}
               />
               {state.proposalAccepted === false ? (
                 <Row
-                  label="Omstandigheden"
-                  value={state.circumstancesNotes || "Geen toelichting"}
+                  label={t(lang, "overview.row.circumstances")}
+                  value={state.circumstancesNotes || t(lang, "overview.empty.proposal_notes")}
                 />
               ) : null}
             </Section>
-            <Section title="Contact tussen voertuigen">
+            <Section title={t(lang, "overview.section.vehicle_contact")}>
               <Row
-                label="Was er contact"
-                value={yesNo(state.vehicleContact) ?? "Niet opgegeven"}
+                label={t(lang, "overview.row.contact")}
+                value={yesNo(state.vehicleContact) ?? notSpecified}
               />
             </Section>
           </>
         ) : null}
         {tab === "raakpunt" ? (
           <>
-            <Section title="Raakpunt voertuig A">
-              <OverviewImpactPreview party="A" point={state.impactPartyA} />
+            <Section title={t(lang, "overview.section.impact_a")}>
+              <OverviewImpactPreview party="A" point={state.impactPartyA} lang={lang} />
             </Section>
-            <Section title="Raakpunt voertuig B">
-              <OverviewImpactPreview party="B" point={state.impactPartyB} />
+            <Section title={t(lang, "overview.section.impact_b")}>
+              <OverviewImpactPreview party="B" point={state.impactPartyB} lang={lang} />
             </Section>
           </>
         ) : null}
         {tab === "getuigen" ? (
-          <Section title="Getuigen">
+          <Section title={t(lang, "overview.section.witnesses")}>
             {state.getuigen?.trim() ? (
               <p className="whitespace-pre-wrap text-[14px] text-[#163247]">
                 {state.getuigen}
               </p>
             ) : (
               <p className="text-[14px] italic text-[#5F7382]">
-                Geen getuigen opgegeven.
+                {t(lang, "overview.empty.witnesses")}
               </p>
             )}
           </Section>
         ) : null}
         {tab === "gegevens" ? (
           <>
-            <Section title="Bestuurder A">
-              <Row label="Naam" value={personLine(state.partyA.bestuurder) || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.driver_a")}>
+              <Row label={t(lang, "field.lastname")} value={personLine(state.partyA.bestuurder) || notFilled} />
               <Row
-                label="Geboortedatum"
+                label={t(lang, "field.birthdate")}
                 value={
                   formatDateForDisplay(state.partyA.bestuurder.geboortedatum) ||
-                  "Niet ingevuld"
+                  notFilled
                 }
               />
-              <Row label="Telefoon" value={state.partyA.bestuurder.telefoon || "Niet ingevuld"} />
-              <Row label="E-mail" value={state.partyA.bestuurder.email || "Niet ingevuld"} />
-              <Row label="Rijbewijs" value={state.partyA.bestuurder.rijbewijsNummer || "Niet ingevuld"} />
-              <Row label="Adres" value={addressLine(state.partyA.bestuurder.adres) || "Niet ingevuld"} />
+              <Row label={t(lang, "overview.row.phone")} value={state.partyA.bestuurder.telefoon || notFilled} />
+              <Row label={t(lang, "overview.row.email")} value={state.partyA.bestuurder.email || notFilled} />
+              <Row label={t(lang, "overview.row.license")} value={state.partyA.bestuurder.rijbewijsNummer || notFilled} />
+              <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyA.bestuurder.adres) || notFilled} />
             </Section>
-            <Section title="Voertuig A">
-              <Row label="Merk & model" value={state.partyA.voertuig.merkModel || "Niet ingevuld"} />
-              <Row label="Nummerplaat" value={state.partyA.voertuig.nummerplaat || "Niet ingevuld"} />
-              <Row label="Land" value={state.partyA.voertuig.landInschrijving || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.vehicle_a")}>
+              <Row label={t(lang, "field.make_model")} value={state.partyA.voertuig.merkModel || notFilled} />
+              <Row label={t(lang, "field.plate")} value={state.partyA.voertuig.nummerplaat || notFilled} />
+              <Row label={t(lang, "field.country")} value={state.partyA.voertuig.landInschrijving || notFilled} />
             </Section>
-            <Section title="Verzekering A">
-              <Row label="Maatschappij" value={state.partyA.verzekering.maatschappij || "Niet ingevuld"} />
-              <Row label="Polisnummer" value={state.partyA.verzekering.polisnummer || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.insurance_a")}>
+              <Row label={t(lang, "overview.row.company")} value={state.partyA.verzekering.maatschappij || notFilled} />
+              <Row label={t(lang, "overview.row.policy")} value={state.partyA.verzekering.polisnummer || notFilled} />
             </Section>
-            <Section title="Verzekeringsnemer A">
-              <Row label="Naam" value={personLine(state.partyA.verzekeringsnemer) || "Niet ingevuld"} />
-              <Row label="Ondernemingsnr." value={state.partyA.verzekeringsnemer.ondernemingsnummer || "—"} />
-              <Row label="Adres" value={addressLine(state.partyA.verzekeringsnemer.adres) || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.holder_a")}>
+              <Row label={t(lang, "field.lastname")} value={personLine(state.partyA.verzekeringsnemer) || notFilled} />
+              <Row label={t(lang, "overview.row.enterprise")} value={state.partyA.verzekeringsnemer.ondernemingsnummer || t(lang, "common.dash")} />
+              <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyA.verzekeringsnemer.adres) || notFilled} />
             </Section>
-            <Section title="Bestuurder B">
-              <Row label="Naam" value={personLine(state.partyB.bestuurder) || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.driver_b")}>
+              <Row label={t(lang, "field.lastname")} value={personLine(state.partyB.bestuurder) || notFilled} />
               <Row
-                label="Geboortedatum"
+                label={t(lang, "field.birthdate")}
                 value={
                   formatDateForDisplay(state.partyB.bestuurder.geboortedatum) ||
-                  "Niet ingevuld"
+                  notFilled
                 }
               />
-              <Row label="Telefoon" value={state.partyB.bestuurder.telefoon || "Niet ingevuld"} />
-              <Row label="E-mail" value={state.partyB.bestuurder.email || "Niet ingevuld"} />
-              <Row label="Rijbewijs" value={state.partyB.bestuurder.rijbewijsNummer || "Niet ingevuld"} />
-              <Row label="Adres" value={addressLine(state.partyB.bestuurder.adres) || "Niet ingevuld"} />
+              <Row label={t(lang, "overview.row.phone")} value={state.partyB.bestuurder.telefoon || notFilled} />
+              <Row label={t(lang, "overview.row.email")} value={state.partyB.bestuurder.email || notFilled} />
+              <Row label={t(lang, "overview.row.license")} value={state.partyB.bestuurder.rijbewijsNummer || notFilled} />
+              <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyB.bestuurder.adres) || notFilled} />
             </Section>
-            <Section title="Voertuig B">
-              <Row label="Merk & model" value={state.partyB.voertuig.merkModel || "Niet ingevuld"} />
-              <Row label="Nummerplaat" value={state.partyB.voertuig.nummerplaat || "Niet ingevuld"} />
-              <Row label="Land" value={state.partyB.voertuig.landInschrijving || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.vehicle_b")}>
+              <Row label={t(lang, "field.make_model")} value={state.partyB.voertuig.merkModel || notFilled} />
+              <Row label={t(lang, "field.plate")} value={state.partyB.voertuig.nummerplaat || notFilled} />
+              <Row label={t(lang, "field.country")} value={state.partyB.voertuig.landInschrijving || notFilled} />
             </Section>
-            <Section title="Verzekering B">
-              <Row label="Maatschappij" value={state.partyB.verzekering.maatschappij || "Niet ingevuld"} />
-              <Row label="Polisnummer" value={state.partyB.verzekering.polisnummer || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.insurance_b")}>
+              <Row label={t(lang, "overview.row.company")} value={state.partyB.verzekering.maatschappij || notFilled} />
+              <Row label={t(lang, "overview.row.policy")} value={state.partyB.verzekering.polisnummer || notFilled} />
             </Section>
-            <Section title="Verzekeringsnemer B">
-              <Row label="Naam" value={personLine(state.partyB.verzekeringsnemer) || "Niet ingevuld"} />
-              <Row label="Adres" value={addressLine(state.partyB.verzekeringsnemer.adres) || "Niet ingevuld"} />
+            <Section title={t(lang, "overview.section.holder_b")}>
+              <Row label={t(lang, "field.lastname")} value={personLine(state.partyB.verzekeringsnemer) || notFilled} />
+              <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyB.verzekeringsnemer.adres) || notFilled} />
             </Section>
           </>
         ) : null}
@@ -2842,14 +2917,16 @@ function OverviewTabs({ state }: { state: AccidentReportState }) {
 function OverviewImpactPreview({
   party,
   point,
+  lang = "nl",
 }: {
   party: "A" | "B";
   point: { x: number; y: number } | null;
+  lang?: OngevalLang;
 }) {
   if (!point) {
     return (
       <p className="text-[14px] italic text-[#5F7382]">
-        Geen raakpunt aangeduid.
+        {t(lang, "overview.empty.impact")}
       </p>
     );
   }
@@ -2897,9 +2974,11 @@ function Row({ label, value }: { label: string; value: string }) {
 function PdfPreviewStep({
   reportId,
   guestSecret,
+  lang = "nl",
 }: {
   reportId: string;
   guestSecret: string | null;
+  lang?: OngevalLang;
 }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -2933,12 +3012,12 @@ function PdfPreviewStep({
         return url;
       });
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "Onbekende fout");
-      toast.error("PDF laden mislukt.");
+      setErrorMessage(e instanceof Error ? e.message : "Unknown error");
+      toast.error(t(lang, "complete.error_title"));
     } finally {
       setLoading(false);
     }
-  }, [previewUrl]);
+  }, [previewUrl, lang]);
 
   useEffect(() => {
     void loadPreview();
@@ -2967,22 +3046,22 @@ function PdfPreviewStep({
     <div className="flex flex-col gap-4 px-4 py-6">
       <div className="flex flex-col items-center gap-1 text-center">
         <p className="text-[18px] font-semibold text-[#163247]">
-          Aangifte voltooid
+          {t(lang, "complete.title")}
         </p>
         <p className="text-[13px] leading-relaxed text-[#5F7382]">
-          Controleer het ingevulde Europees aanrijdingsformulier hieronder.
+          {t(lang, "complete.subtitle")}
         </p>
       </div>
       <div className="relative min-h-[420px] overflow-hidden rounded-2xl border border-black/[0.08] bg-[#F7F9FC]">
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center text-[13px] text-[#5F7382]">
-            PDF laden…
+            {t(lang, "complete.loading")}
           </div>
         ) : null}
         {errorMessage && !loading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4 text-center">
             <p className="text-[14px] font-medium text-[#B42318]">
-              PDF laden mislukt
+              {t(lang, "complete.error_title")}
             </p>
             <p className="text-[12px] text-[#5F7382]">{errorMessage}</p>
             <Button
@@ -2992,7 +3071,7 @@ function PdfPreviewStep({
               }}
               className="h-10 rounded-lg bg-[#2799D7] text-[13px] font-semibold text-white hover:bg-[#1e7bb0]"
             >
-              Opnieuw proberen
+              {t(lang, "complete.retry")}
             </Button>
           </div>
         ) : null}
@@ -3000,7 +3079,7 @@ function PdfPreviewStep({
           <iframe
             src={pdfUrl}
             className="h-[520px] w-full"
-            title="Europees aanrijdingsformulier preview"
+            title="European accident statement preview"
           />
         ) : null}
       </div>
@@ -3011,7 +3090,7 @@ function PdfPreviewStep({
           onClick={download}
           className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white hover:bg-[#1e7bb0] disabled:opacity-50"
         >
-          Download PDF
+          {t(lang, "complete.download")}
         </Button>
       </div>
     </div>
