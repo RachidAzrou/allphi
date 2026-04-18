@@ -263,7 +263,8 @@ export function validateStep(
         state.otherDriver.adres.huisnummer.trim().length > 0 &&
         state.otherDriver.adres.postcode.trim().length > 0 &&
         state.otherDriver.adres.stad.trim().length > 0 &&
-        state.otherDriver.adres.land.trim().length > 0
+        state.otherDriver.adres.land.trim().length > 0 &&
+        state.otherDriver.rijbewijsNummer.trim().length > 0
       );
     case "driver_employee_form":
       return (
@@ -274,7 +275,8 @@ export function validateStep(
         state.employeeDriver.adres.huisnummer.trim().length > 0 &&
         state.employeeDriver.adres.postcode.trim().length > 0 &&
         state.employeeDriver.adres.stad.trim().length > 0 &&
-        state.employeeDriver.adres.land.trim().length > 0
+        state.employeeDriver.adres.land.trim().length > 0 &&
+        state.employeeDriver.rijbewijsNummer.trim().length > 0
       );
     case "policyholder_select":
       return Boolean(state.partyA.verzekeringsnemerType);

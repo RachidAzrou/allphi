@@ -34,10 +34,14 @@ export function JoinClient() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
 
+  const presetRid = searchParams.get("rid");
+  const presetSecret = searchParams.get("s");
+  const hasPreset = Boolean(presetRid && presetSecret);
+
   const [manual, setManual] = useState("");
   const [status, setStatus] = useState<
     "idle" | "scanning" | "joining" | "error"
-  >("idle");
+  >(hasPreset ? "joining" : "idle");
   const [error, setError] = useState<string | null>(null);
 
   const join = useCallback(
@@ -63,14 +67,13 @@ export function JoinClient() {
   );
 
   useEffect(() => {
-    const rid = searchParams.get("rid");
-    const secret = searchParams.get("s");
-    if (rid && secret) {
-      void join(rid, secret);
+    if (presetRid && presetSecret) {
+      void join(presetRid, presetSecret);
     }
-  }, [join, searchParams]);
+  }, [join, presetRid, presetSecret]);
 
   useEffect(() => {
+    if (hasPreset) return;
     if (status === "joining") return;
     setStatus("scanning");
     setError(null);
@@ -122,7 +125,35 @@ export function JoinClient() {
         /* ignore */
       }
     };
-  }, [join, status]);
+  }, [hasPreset, join, status]);
+
+  if (hasPreset) {
+    return (
+      <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+        <AppHeader userEmail="" userDisplayName="" />
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 py-10">
+          <div className="w-full rounded-2xl border border-black/[0.06] bg-white p-6 text-center shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
+            <h2 className="font-heading text-xl font-semibold text-[#163247]">
+              Dossier koppelen…
+            </h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-[#5F7382]">
+              Even geduld, we koppelen je aan het dossier van partij A.
+            </p>
+            {status === "error" || error ? (
+              <p className="mt-3 text-[13px] font-medium text-red-600">
+                {error ?? "Er ging iets mis. Vraag partij A om de QR opnieuw te tonen."}
+              </p>
+            ) : (
+              <div
+                className="mx-auto mt-4 h-6 w-6 animate-spin rounded-full border-2 border-[#2799D7]/30 border-t-[#2799D7]"
+                aria-hidden
+              />
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">

@@ -1079,8 +1079,9 @@ export function OngevalWizard({
                 Persoonsgegevens
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Voornaam">
+                <Field label="Voornaam" required>
                   <Input
+                    required
                     value={d.voornaam}
                     onChange={(e) =>
                       updateState({
@@ -1096,8 +1097,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Naam">
+                <Field label="Naam" required>
                   <Input
+                    required
                     value={d.naam}
                     onChange={(e) =>
                       updateState({
@@ -1114,8 +1116,9 @@ export function OngevalWizard({
                   />
                 </Field>
               </div>
-              <Field label="Geboortedatum">
+              <Field label="Geboortedatum" required>
                 <Input
+                  required
                   type="date"
                   value={d.geboortedatum}
                   onChange={(e) =>
@@ -1138,8 +1141,9 @@ export function OngevalWizard({
               <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
                 Adres
               </h3>
-              <Field label="Straat">
+              <Field label="Straat" required>
                 <Input
+                  required
                   value={d.adres.straat}
                   onChange={(e) =>
                     updateState({
@@ -1162,8 +1166,9 @@ export function OngevalWizard({
                 />
               </Field>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="Huisnr.">
+                <Field label="Huisnr." required>
                   <Input
+                    required
                     value={d.adres.huisnummer}
                     onChange={(e) =>
                       updateState({
@@ -1208,8 +1213,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Postcode">
+                <Field label="Postcode" required>
                   <Input
+                    required
                     value={d.adres.postcode}
                     onChange={(e) =>
                       updateState({
@@ -1233,8 +1239,9 @@ export function OngevalWizard({
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Stad">
+                <Field label="Stad" required>
                   <Input
+                    required
                     value={d.adres.stad}
                     onChange={(e) =>
                       updateState({
@@ -1256,8 +1263,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Land">
+                <Field label="Land" required>
                   <Input
+                    required
                     value={d.adres.land}
                     onChange={(e) =>
                       updateState({
@@ -1286,8 +1294,9 @@ export function OngevalWizard({
               <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
                 Rijbewijs
               </h3>
-              <Field label="Rijbewijsnummer">
+              <Field label="Rijbewijsnummer" required>
                 <Input
+                  required
                   value={d.rijbewijsNummer}
                   onChange={(e) =>
                     updateState({
@@ -1316,8 +1325,9 @@ export function OngevalWizard({
                 Persoonsgegevens
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Voornaam">
+                <Field label="Voornaam" required>
                   <Input
+                    required
                     value={d.voornaam}
                     onChange={(e) =>
                       updateState({
@@ -1326,8 +1336,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Naam">
+                <Field label="Naam" required>
                   <Input
+                    required
                     value={d.naam}
                     onChange={(e) =>
                       updateState({
@@ -1337,8 +1348,9 @@ export function OngevalWizard({
                   />
                 </Field>
               </div>
-              <Field label="Geboortedatum">
+              <Field label="Geboortedatum" required>
                 <Input
+                  required
                   type="date"
                   value={d.geboortedatum}
                   onChange={(e) =>
@@ -1354,8 +1366,9 @@ export function OngevalWizard({
               <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
                 Adres
               </h3>
-              <Field label="Straat">
+              <Field label="Straat" required>
                 <Input
+                  required
                   value={d.adres.straat}
                   onChange={(e) =>
                     updateState({
@@ -1368,8 +1381,9 @@ export function OngevalWizard({
                 />
               </Field>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="Huisnr.">
+                <Field label="Huisnr." required>
                   <Input
+                    required
                     value={d.adres.huisnummer}
                     onChange={(e) =>
                       updateState({
@@ -1394,8 +1408,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Postcode">
+                <Field label="Postcode" required>
                   <Input
+                    required
                     value={d.adres.postcode}
                     onChange={(e) =>
                       updateState({
@@ -1409,8 +1424,9 @@ export function OngevalWizard({
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Stad">
+                <Field label="Stad" required>
                   <Input
+                    required
                     value={d.adres.stad}
                     onChange={(e) =>
                       updateState({
@@ -1422,8 +1438,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Land">
+                <Field label="Land" required>
                   <Input
+                    required
                     value={d.adres.land}
                     onChange={(e) =>
                       updateState({
@@ -1442,8 +1459,9 @@ export function OngevalWizard({
               <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
                 Rijbewijs
               </h3>
-              <Field label="Rijbewijsnummer">
+              <Field label="Rijbewijsnummer" required>
                 <Input
+                  required
                   value={d.rijbewijsNummer}
                   onChange={(e) =>
                     updateState({
@@ -1498,8 +1516,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Naam (bedrijf)">
+                <Field label="Naam (bedrijf)" required>
                   <Input
+                    required
                     value={p.naam}
                     onChange={(e) =>
                       updateState({
@@ -1534,8 +1553,9 @@ export function OngevalWizard({
               <h3 className="font-heading text-[15px] font-semibold text-[#163247]">
                 Adres
               </h3>
-              <Field label="Straat">
+              <Field label="Straat" required>
                 <Input
+                  required
                   value={p.adres.straat}
                   onChange={(e) =>
                     updateState({
@@ -1551,8 +1571,9 @@ export function OngevalWizard({
                 />
               </Field>
               <div className="grid grid-cols-3 gap-2">
-                <Field label="Huisnr.">
+                <Field label="Huisnr." required>
                   <Input
+                    required
                     value={p.adres.huisnummer}
                     onChange={(e) =>
                       updateState({
@@ -1583,8 +1604,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Postcode">
+                <Field label="Postcode" required>
                   <Input
+                    required
                     value={p.adres.postcode}
                     onChange={(e) =>
                       updateState({
@@ -1601,8 +1623,9 @@ export function OngevalWizard({
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Stad">
+                <Field label="Stad" required>
                   <Input
+                    required
                     value={p.adres.stad}
                     onChange={(e) =>
                       updateState({
@@ -1617,8 +1640,9 @@ export function OngevalWizard({
                     }
                   />
                 </Field>
-                <Field label="Land">
+                <Field label="Land" required>
                   <Input
+                    required
                     value={p.adres.land}
                     onChange={(e) =>
                       updateState({
@@ -1642,8 +1666,9 @@ export function OngevalWizard({
         const ins = state.partyA.verzekering;
         return (
           <div className="flex flex-col gap-3 px-4 py-6">
-            <Field label="Verzekeringsmaatschappij">
+            <Field label="Verzekeringsmaatschappij" required>
               <Input
+                required
                 value={ins.maatschappij}
                 onChange={(e) =>
                   updateState({
@@ -1655,8 +1680,9 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Polisnummer">
+            <Field label="Polisnummer" required>
               <Input
+                required
                 value={ins.polisnummer}
                 onChange={(e) =>
                   updateState({
@@ -1675,8 +1701,9 @@ export function OngevalWizard({
         const v = state.partyA.voertuig;
         return (
           <div className="flex flex-col gap-3 px-4 py-6">
-            <Field label="Merk & model">
+            <Field label="Merk & model" required>
               <Input
+                required
                 value={v.merkModel}
                 onChange={(e) =>
                   updateState({
@@ -1688,8 +1715,9 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Nummerplaat">
+            <Field label="Nummerplaat" required>
               <Input
+                required
                 value={v.nummerplaat}
                 onChange={(e) =>
                   updateState({
@@ -1701,8 +1729,9 @@ export function OngevalWizard({
                 }
               />
             </Field>
-            <Field label="Land van inschrijving">
+            <Field label="Land van inschrijving" required>
               <Input
+                required
                 value={v.landInschrijving}
                 onChange={(e) =>
                   updateState({
@@ -2536,14 +2565,24 @@ export function OngevalWizard({
 
 function Field({
   label,
+  required = false,
   children,
 }: {
   label: string;
+  required?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-[#5F7382]">{label}</span>
+      <span className="text-[12px] font-medium text-[#5F7382]">
+        {label}
+        {required ? (
+          <span className="ml-0.5 text-[#E11D2E]" aria-hidden>
+            *
+          </span>
+        ) : null}
+        {required ? <span className="sr-only"> (verplicht)</span> : null}
+      </span>
       {children}
     </label>
   );
