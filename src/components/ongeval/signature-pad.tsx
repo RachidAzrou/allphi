@@ -10,18 +10,28 @@ type SignaturePadProps = {
   className?: string;
 };
 
+type Point = { x: number; y: number };
+type Stroke = Point[];
+
 /**
- * Canvas-gebaseerd handtekeningveld. Slaat tekening op als PNG dataURL in `value`.
+ * Canvas-gebaseerd handtekeningveld. Slaat tekening op als PNG dataURL in `value`,
+ * en houdt intern de individuele strokes bij zodat de "undo"-knop enkel de
+ * laatste lijn verwijdert i.p.v. alles te wissen.
  *
- * Belangrijk voor de bug-fix: we mogen `value` NIET in de deps van de
- * resize-effect zetten, anders wordt bij elke stroke de canvas opnieuw
- * gedimensioneerd en wist de canvas (native gedrag bij canvas.width/height).
+ * Belangrijk voor de resize bug-fix: `value` mag NIET in de deps van de
+ * resize-effect staan, anders wordt bij elke stroke de canvas opnieuw
+ * gedimensioneerd en wist het canvas (native gedrag bij canvas.width/height).
  */
 export function SignaturePad({ value, onChange, className }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastValueRef = useRef<string | null>(null);
+  /** Geschiedenis van afgewerkte strokes (puntenreeksen in CSS-pixels). */
+  const strokesRef = useRef<Stroke[]>([]);
+  /** Stroke die op dit moment getekend wordt. */
+  const currentStrokeRef = useRef<Stroke>([]);
   const [dimensioned, setDimensioned] = useState(false);
+  const [strokeCount, setStrokeCount] = useState(0);
 
   const drawImageOnCanvas = useCallback((dataUrl: string | null) => {
     const c = canvasRef.current;
@@ -61,12 +71,45 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     ctx.lineWidth = 2.25;
   }, []);
 
+  /** Tekent één stroke (≥ 1 punt) op het canvas. */
+  const drawStroke = useCallback((stroke: Stroke) => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx || stroke.length === 0) return;
+    ctx.beginPath();
+    ctx.moveTo(stroke[0].x, stroke[0].y);
+    if (stroke.length === 1) {
+      // Tap zonder bewegen → klein puntje zodat de gebruiker visueel feedback krijgt.
+      ctx.lineTo(stroke[0].x + 0.01, stroke[0].y + 0.01);
+    } else {
+      for (let i = 1; i < stroke.length; i++) {
+        ctx.lineTo(stroke[i].x, stroke[i].y);
+      }
+    }
+    ctx.stroke();
+  }, []);
+
+  /** Wist canvas en hertekent alle bewaarde strokes. */
+  const repaintStrokes = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, c.clientWidth, c.clientHeight);
+    for (const s of strokesRef.current) drawStroke(s);
+  }, [drawStroke]);
+
   useEffect(() => {
     dimension();
     setDimensioned(true);
     const onResize = () => {
       dimension();
-      drawImageOnCanvas(lastValueRef.current);
+      // Bij een resize hertekenen we strokes uit de history (scherpste resultaat).
+      // Geen history (bv. herladen vanuit `value`) → val terug op de PNG-snapshot.
+      if (strokesRef.current.length > 0) {
+        repaintStrokes();
+      } else {
+        drawImageOnCanvas(lastValueRef.current);
+      }
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -77,10 +120,14 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     if (!dimensioned) return;
     if (lastValueRef.current === value) return;
     lastValueRef.current = value;
+    // Externe wijziging (bv. parent zet null of laadt een PNG): stroke-history
+    // matcht niet meer met de pixels op canvas, dus wis ze.
+    strokesRef.current = [];
+    setStrokeCount(0);
     drawImageOnCanvas(value);
   }, [value, dimensioned, drawImageOnCanvas]);
 
-  const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const getPos = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
     const c = canvasRef.current;
     if (!c) return { x: 0, y: 0 };
     const r = c.getBoundingClientRect();
@@ -93,9 +140,10 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     drawingRef.current = true;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
-    const { x, y } = getPos(e);
+    const p = getPos(e);
+    currentStrokeRef.current = [p];
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(p.x, p.y);
   };
 
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -103,8 +151,9 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     e.preventDefault();
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
-    const { x, y } = getPos(e);
-    ctx.lineTo(x, y);
+    const p = getPos(e);
+    currentStrokeRef.current.push(p);
+    ctx.lineTo(p.x, p.y);
     ctx.stroke();
   };
 
@@ -116,6 +165,12 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     } catch {
       /* ignore */
     }
+    const stroke = currentStrokeRef.current;
+    currentStrokeRef.current = [];
+    if (stroke.length > 0) {
+      strokesRef.current = [...strokesRef.current, stroke];
+      setStrokeCount(strokesRef.current.length);
+    }
     const c = canvasRef.current;
     if (c) {
       const dataUrl = c.toDataURL("image/png");
@@ -124,15 +179,39 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
     }
   };
 
-  const clear = () => {
+  /**
+   * Verwijdert de laatste getrokken lijn uit de history en hertekent.
+   * Fallback: als er geen stroke-history is (bv. handtekening werd herladen
+   * uit een opgeslagen PNG), wissen we het volledige canvas.
+   */
+  const undoLast = () => {
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext("2d");
     if (!ctx) return;
+
+    if (strokesRef.current.length > 0) {
+      strokesRef.current = strokesRef.current.slice(0, -1);
+      setStrokeCount(strokesRef.current.length);
+      repaintStrokes();
+      if (strokesRef.current.length === 0) {
+        lastValueRef.current = null;
+        onChange(null);
+      } else {
+        const dataUrl = c.toDataURL("image/png");
+        lastValueRef.current = dataUrl;
+        onChange(dataUrl);
+      }
+      return;
+    }
+
+    // Geen history beschikbaar → wis volledig.
     ctx.clearRect(0, 0, c.clientWidth, c.clientHeight);
     lastValueRef.current = null;
     onChange(null);
   };
+
+  const hasContent = strokeCount > 0 || Boolean(value);
 
   return (
     <div
@@ -151,9 +230,11 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
       />
       <button
         type="button"
-        onClick={clear}
-        className="absolute bottom-3 left-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/90 p-2 text-[#163247] shadow-md hover:bg-white"
-        aria-label="Wissen"
+        onClick={undoLast}
+        disabled={!hasContent}
+        className="absolute bottom-3 left-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/90 p-2 text-[#163247] shadow-md transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label="Laatste lijn ongedaan maken"
+        title="Laatste lijn ongedaan maken"
       >
         <RotateCcw className="size-5" strokeWidth={1.75} />
       </button>

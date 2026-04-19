@@ -2,14 +2,89 @@
 
 import {
   ArrowLeft,
+  ArrowLeftRight,
+  BadgeCheck,
+  Building2,
+  Car,
   Check,
+  ClipboardList,
+  DoorOpen,
+  FilePenLine,
+  GitBranch,
+  Languages,
   LogOut,
+  MapPin,
+  ParkingCircle,
+  Pencil,
+  QrCode,
+  ScanLine,
+  ShieldAlert,
+  Smartphone,
+  Split,
+  Truck,
+  UserCircle,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
+import { TbCarCrash, TbScribble } from "react-icons/tb";
+import { FaMagnifyingGlass, FaSignature } from "react-icons/fa6";
+import { MdOutlineSmartphone } from "react-icons/md";
+import type { IconType } from "react-icons";
 import { cn } from "@/lib/utils";
 import { InfoBanner } from "@/components/ongeval/info-banner";
 import type { OngevalStepId } from "@/types/ongeval";
 import { getProgressForStep } from "@/lib/ongeval/engine";
 import { getStepTitleLocalized, type OngevalLang } from "@/lib/ongeval/i18n";
+
+/**
+ * Iconenmap per stap-id voor in de wizard-header. Houdt UI- en domein-
+ * concerns gescheiden van `engine.ts`. Onbekende ids vallen terug op
+ * `FilePenLine` zodat nieuwe stappen niet meteen breken.
+ */
+const STEP_ICONS: Partial<Record<OngevalStepId, LucideIcon | IconType>> = {
+  submission_mode: FilePenLine,
+  scan_capture: ScanLine,
+  driver_select: UserCircle,
+  driver_employee_form: UserCircle,
+  driver_other_form: UserCircle,
+  policyholder_select: Building2,
+  policyholder_form: Building2,
+  insurer_select: BadgeCheck,
+  vehicle_confirm: Car,
+  parties_count: Users,
+  devices_count: MdOutlineSmartphone,
+  role_select: UserCircle,
+  share_qr: QrCode,
+  scan_qr: QrCode,
+  party_b_language: Languages,
+  party_b_optional: Smartphone,
+  party_b_form: UserCircle,
+  location_time: MapPin,
+  injuries_material: ShieldAlert,
+  witnesses: Users,
+  situation_main: ClipboardList,
+  sit_rear_end: Car,
+  sit_center_line: ArrowLeftRight,
+  sit_priority: ShieldAlert,
+  sit_maneuver_a: GitBranch,
+  sit_maneuver_b: GitBranch,
+  sit_lane_change: Split,
+  sit_parking: ParkingCircle,
+  sit_door: DoorOpen,
+  sit_load: Truck,
+  circumstances_manual: Pencil,
+  vehicle_contact: TbCarCrash,
+  impact_party_a: TbCarCrash,
+  impact_party_b: TbCarCrash,
+  visible_damage_a: FaMagnifyingGlass,
+  visible_damage_b: FaMagnifyingGlass,
+  accident_sketch: TbScribble,
+  overview_intro: ClipboardList,
+  overview_detail: ClipboardList,
+  signature_a: FaSignature,
+  signature_b: FaSignature,
+  complete: BadgeCheck,
+};
 
 type WizardShellProps = {
   stepId: OngevalStepId;
@@ -45,6 +120,7 @@ export function WizardShell({
 }: WizardShellProps) {
   const { step, total, fraction } = getProgressForStep(stepId);
   const title = getStepTitleLocalized(stepId, lang);
+  const StepIcon = STEP_ICONS[stepId] ?? FilePenLine;
   const progressText = stepLabel
     ? stepLabel(step, total)
     : lang === "fr"
@@ -80,13 +156,20 @@ export function WizardShell({
           ) : (
             <div className="h-11 w-11 shrink-0" aria-hidden />
           )}
-          <h1 className="font-heading min-w-0 flex-1 truncate px-1 text-center text-[16px] font-semibold leading-tight tracking-tight">
-            {title}
-          </h1>
+          <div className="flex min-w-0 flex-1 items-center justify-center gap-2 px-1">
+            <StepIcon
+              aria-hidden
+              className="size-[22px] shrink-0 text-white"
+              strokeWidth={2}
+            />
+            <h1 className="font-heading min-w-0 truncate text-center text-[16px] font-semibold leading-tight tracking-tight">
+              {title}
+            </h1>
+          </div>
           <button
             type="button"
             onClick={onExit}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-white/12 active:bg-white/18"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-[#FCA5A5]/35 hover:text-white active:bg-[#F87171]/55"
             aria-label={exitAria}
           >
             <LogOut className="size-5" strokeWidth={1.75} />

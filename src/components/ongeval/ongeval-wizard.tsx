@@ -10,17 +10,20 @@ import {
   Car,
   Check,
   ChevronRight,
+  ClipboardList,
   Clock,
   Download,
   DoorOpen,
   FilePenLine,
-  FileText,
   GitBranch,
   ScanLine,
   Info,
   Languages,
+  MapPin,
   ParkingCircle,
   Pencil,
+  Plus,
+  Trash2,
   QrCode,
   RefreshCw,
   Send,
@@ -34,6 +37,10 @@ import {
   X,
 } from "lucide-react";
 import { FcTwoSmartphones } from "react-icons/fc";
+import { FaCarSide } from "react-icons/fa";
+import { TbCarCrash } from "react-icons/tb";
+import { GoTasklist } from "react-icons/go";
+import { LuListStart } from "react-icons/lu";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { createClient } from "@/lib/supabase/client";
@@ -161,7 +168,7 @@ export function OngevalWizard({
     signature_a: "banner.signature",
     signature_b: "banner.signature",
     vehicle_contact: "banner.vehicle_contact",
-    proposal_intro: "banner.proposal_intro",
+    circumstances_manual: "banner.circumstances_manual",
   };
   const bannerMessageI18nKey = bannerKeyByStep[stepId];
   const bannerMessage = bannerMessageI18nKey
@@ -860,6 +867,114 @@ export function OngevalWizard({
               }
             />
           </Field>
+          <details
+            open
+            className="group rounded-2xl border border-black/[0.06] bg-white open:shadow-[0_2px_12px_rgba(39,153,215,0.07)]"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[14px] font-semibold text-[#163247]">
+              <span>{t(lang, "insurance.extra_toggle")}</span>
+              <ChevronRight
+                aria-hidden
+                className="size-4 text-[#5F7382] transition-transform group-open:rotate-90"
+                strokeWidth={2}
+              />
+            </summary>
+            <div className="flex flex-col gap-3 border-t border-black/[0.06] px-4 py-4">
+              <Field label={t(lang, "insurance.green_card")} required>
+                <Input
+                  required
+                  value={p.verzekering.groeneKaartNr}
+                  onChange={(e) =>
+                    updateState({
+                      partyB: {
+                        ...p,
+                        verzekering: {
+                          ...p.verzekering,
+                          groeneKaartNr: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={t(lang, "insurance.valid_from")} required>
+                  <Input
+                    required
+                    type="date"
+                    value={p.verzekering.geldigVan}
+                    onChange={(e) =>
+                      updateState({
+                        partyB: {
+                          ...p,
+                          verzekering: {
+                            ...p.verzekering,
+                            geldigVan: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label={t(lang, "insurance.valid_to")} required>
+                  <Input
+                    required
+                    type="date"
+                    value={p.verzekering.geldigTot}
+                    onChange={(e) =>
+                      updateState({
+                        partyB: {
+                          ...p,
+                          verzekering: {
+                            ...p.verzekering,
+                            geldigTot: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+              <Field label={t(lang, "insurance.agency")}>
+                <Input
+                  value={p.verzekering.agentschap.naam}
+                  onChange={(e) =>
+                    updateState({
+                      partyB: {
+                        ...p,
+                        verzekering: {
+                          ...p.verzekering,
+                          agentschap: {
+                            ...p.verzekering.agentschap,
+                            naam: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+              <Field label={t(lang, "insurance.agency_contact")}>
+                <Input
+                  value={p.verzekering.agentschap.contact}
+                  onChange={(e) =>
+                    updateState({
+                      partyB: {
+                        ...p,
+                        verzekering: {
+                          ...p.verzekering,
+                          agentschap: {
+                            ...p.verzekering.agentschap,
+                            contact: e.target.value,
+                          },
+                        },
+                      },
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          </details>
         </section>
 
         <section className="flex flex-col gap-3">
@@ -903,6 +1018,80 @@ export function OngevalWizard({
                 }
               />
             </Field>
+          </div>
+          <div className="flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white p-4">
+            <label className="flex cursor-pointer items-start justify-between gap-3">
+              <span className="flex flex-col">
+                <span className="font-heading text-[14px] font-semibold text-[#163247]">
+                  {t(lang, "vehicle.trailer_toggle")}
+                </span>
+                <span className="text-[12.5px] leading-snug text-[#5F7382]">
+                  {t(lang, "vehicle.trailer_help")}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="mt-1 size-5 cursor-pointer accent-[#2799D7]"
+                checked={p.voertuig.aanhanger !== null}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      voertuig: {
+                        ...p.voertuig,
+                        aanhanger: e.target.checked
+                          ? { nummerplaat: "", landInschrijving: "België" }
+                          : null,
+                      },
+                    },
+                  })
+                }
+              />
+            </label>
+            {p.voertuig.aanhanger ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={t(lang, "vehicle.trailer_plate")} required>
+                  <Input
+                    required
+                    value={p.voertuig.aanhanger.nummerplaat}
+                    onChange={(e) =>
+                      updateState({
+                        partyB: {
+                          ...p,
+                          voertuig: {
+                            ...p.voertuig,
+                            aanhanger: {
+                              ...p.voertuig.aanhanger!,
+                              nummerplaat: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label={t(lang, "vehicle.trailer_country")} required>
+                  <Input
+                    required
+                    value={p.voertuig.aanhanger.landInschrijving}
+                    onChange={(e) =>
+                      updateState({
+                        partyB: {
+                          ...p,
+                          voertuig: {
+                            ...p.voertuig,
+                            aanhanger: {
+                              ...p.voertuig.aanhanger!,
+                              landInschrijving: e.target.value,
+                            },
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -968,6 +1157,42 @@ export function OngevalWizard({
               }
             />
           </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label={t(lang, "field.license_category")}>
+              <Input
+                placeholder="bv. B, BE, C"
+                value={p.bestuurder.rijbewijsCategorie}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: {
+                        ...p.bestuurder,
+                        rijbewijsCategorie: e.target.value,
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label={t(lang, "field.license_valid_to")}>
+              <Input
+                type="date"
+                value={p.bestuurder.rijbewijsGeldigTot}
+                onChange={(e) =>
+                  updateState({
+                    partyB: {
+                      ...p,
+                      bestuurder: {
+                        ...p.bestuurder,
+                        rijbewijsGeldigTot: e.target.value,
+                      },
+                    },
+                  })
+                }
+              />
+            </Field>
+          </div>
           <Field label={t(lang, "field.street")}>
             <Input
               value={p.bestuurder.adres.straat}
@@ -1064,7 +1289,7 @@ export function OngevalWizard({
               {t(lang, "submission_mode.intro")}
             </p>
             <ModeCard
-              icon={FileText}
+              icon={LuListStart}
               title={t(lang, "submission_mode.wizard_title")}
               description={t(lang, "submission_mode.wizard_desc")}
               onClick={() => {
@@ -1371,6 +1596,44 @@ export function OngevalWizard({
                   }
                 />
               </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Categorie">
+                  <Input
+                    placeholder="bv. B, BE, C"
+                    value={d.rijbewijsCategorie}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: { ...d, rijbewijsCategorie: e.target.value },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            rijbewijsCategorie: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Geldig tot">
+                  <Input
+                    type="date"
+                    value={d.rijbewijsGeldigTot}
+                    onChange={(e) =>
+                      updateState({
+                        employeeDriver: { ...d, rijbewijsGeldigTot: e.target.value },
+                        partyA: {
+                          ...state.partyA,
+                          bestuurder: {
+                            ...state.partyA.bestuurder,
+                            rijbewijsGeldigTot: e.target.value,
+                          },
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
             </section>
           </div>
         );
@@ -1529,6 +1792,30 @@ export function OngevalWizard({
                   }
                 />
               </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Categorie">
+                  <Input
+                    placeholder="bv. B, BE, C"
+                    value={d.rijbewijsCategorie}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: { ...d, rijbewijsCategorie: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Geldig tot">
+                  <Input
+                    type="date"
+                    value={d.rijbewijsGeldigTot}
+                    onChange={(e) =>
+                      updateState({
+                        otherDriver: { ...d, rijbewijsGeldigTot: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
             </section>
           </div>
         );
@@ -1723,85 +2010,186 @@ export function OngevalWizard({
       }
       case "insurer_select": {
         const ins = state.partyA.verzekering;
+        const updateIns = (patch: Partial<typeof ins>) =>
+          updateState({
+            partyA: {
+              ...state.partyA,
+              verzekering: { ...ins, ...patch },
+            },
+          });
         return (
-          <div className="flex flex-col gap-3 px-4 py-6">
+          <div className="flex flex-col gap-4 px-4 py-6">
             <Field label="Verzekeringsmaatschappij" required>
               <Input
                 required
                 value={ins.maatschappij}
-                onChange={(e) =>
-                  updateState({
-                    partyA: {
-                      ...state.partyA,
-                      verzekering: { ...ins, maatschappij: e.target.value },
-                    },
-                  })
-                }
+                onChange={(e) => updateIns({ maatschappij: e.target.value })}
               />
             </Field>
             <Field label="Polisnummer" required>
               <Input
                 required
                 value={ins.polisnummer}
-                onChange={(e) =>
-                  updateState({
-                    partyA: {
-                      ...state.partyA,
-                      verzekering: { ...ins, polisnummer: e.target.value },
-                    },
-                  })
-                }
+                onChange={(e) => updateIns({ polisnummer: e.target.value })}
               />
             </Field>
+
+            <details
+              open
+              className="group rounded-2xl border border-black/[0.06] bg-white open:shadow-[0_2px_12px_rgba(39,153,215,0.07)]"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-[14px] font-semibold text-[#163247]">
+                <span>Extra verzekeringsdetails</span>
+                <ChevronRight
+                  aria-hidden
+                  className="size-4 text-[#5F7382] transition-transform group-open:rotate-90"
+                  strokeWidth={2}
+                />
+              </summary>
+              <div className="flex flex-col gap-3 border-t border-black/[0.06] px-4 py-4">
+                <Field label="Nr. groene kaart" required>
+                  <Input
+                    required
+                    value={ins.groeneKaartNr}
+                    onChange={(e) => updateIns({ groeneKaartNr: e.target.value })}
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Geldig vanaf" required>
+                    <Input
+                      required
+                      type="date"
+                      value={ins.geldigVan}
+                      onChange={(e) => updateIns({ geldigVan: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Geldig tot" required>
+                    <Input
+                      required
+                      type="date"
+                      value={ins.geldigTot}
+                      onChange={(e) => updateIns({ geldigTot: e.target.value })}
+                    />
+                  </Field>
+                </div>
+                <Field label="Agentschap / makelaar">
+                  <Input
+                    value={ins.agentschap.naam}
+                    onChange={(e) =>
+                      updateIns({
+                        agentschap: { ...ins.agentschap, naam: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Telefoon of e-mail agentschap">
+                  <Input
+                    value={ins.agentschap.contact}
+                    onChange={(e) =>
+                      updateIns({
+                        agentschap: { ...ins.agentschap, contact: e.target.value },
+                      })
+                    }
+                  />
+                </Field>
+                <YesNoBlock
+                  label="Is de schade aan jouw voertuig verzekerd in het contract?"
+                  value={ins.schadeVerzekerd}
+                  onChange={(v) => updateIns({ schadeVerzekerd: v })}
+                  lang={lang}
+                />
+              </div>
+            </details>
           </div>
         );
       }
       case "vehicle_confirm": {
         const v = state.partyA.voertuig;
+        const updateV = (patch: Partial<typeof v>) =>
+          updateState({
+            partyA: { ...state.partyA, voertuig: { ...v, ...patch } },
+          });
+        const trailerOn = v.aanhanger !== null;
         return (
-          <div className="flex flex-col gap-3 px-4 py-6">
+          <div className="flex flex-col gap-4 px-4 py-6">
             <Field label="Merk & model" required>
               <Input
                 required
                 value={v.merkModel}
-                onChange={(e) =>
-                  updateState({
-                    partyA: {
-                      ...state.partyA,
-                      voertuig: { ...v, merkModel: e.target.value },
-                    },
-                  })
-                }
+                onChange={(e) => updateV({ merkModel: e.target.value })}
               />
             </Field>
             <Field label="Nummerplaat" required>
               <Input
                 required
                 value={v.nummerplaat}
-                onChange={(e) =>
-                  updateState({
-                    partyA: {
-                      ...state.partyA,
-                      voertuig: { ...v, nummerplaat: e.target.value },
-                    },
-                  })
-                }
+                onChange={(e) => updateV({ nummerplaat: e.target.value })}
               />
             </Field>
             <Field label="Land van inschrijving" required>
               <Input
                 required
                 value={v.landInschrijving}
-                onChange={(e) =>
-                  updateState({
-                    partyA: {
-                      ...state.partyA,
-                      voertuig: { ...v, landInschrijving: e.target.value },
-                    },
-                  })
-                }
+                onChange={(e) => updateV({ landInschrijving: e.target.value })}
               />
             </Field>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white p-4">
+              <label className="flex cursor-pointer items-start justify-between gap-3">
+                <span className="flex flex-col">
+                  <span className="font-heading text-[14px] font-semibold text-[#163247]">
+                    Aanhangwagen aangekoppeld?
+                  </span>
+                  <span className="text-[12.5px] leading-snug text-[#5F7382]">
+                    Vul enkel in als er een aanhanger aan het voertuig hing op het moment van het ongeval.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="mt-1 size-5 cursor-pointer accent-[#2799D7]"
+                  checked={trailerOn}
+                  onChange={(e) =>
+                    updateV({
+                      aanhanger: e.target.checked
+                        ? { nummerplaat: "", landInschrijving: "België" }
+                        : null,
+                    })
+                  }
+                />
+              </label>
+              {trailerOn && v.aanhanger ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Nummerplaat aanhanger" required>
+                    <Input
+                      required
+                      value={v.aanhanger.nummerplaat}
+                      onChange={(e) =>
+                        updateV({
+                          aanhanger: {
+                            ...v.aanhanger!,
+                            nummerplaat: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Land inschrijving" required>
+                    <Input
+                      required
+                      value={v.aanhanger.landInschrijving}
+                      onChange={(e) =>
+                        updateV({
+                          aanhanger: {
+                            ...v.aanhanger!,
+                            landInschrijving: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+              ) : null}
+            </div>
           </div>
         );
       }
@@ -1816,9 +2204,11 @@ export function OngevalWizard({
                 const next = {
                   ...state,
                   partiesCount: 1 as const,
-                  wantsFillPartyB: null,
+                  wantsFillPartyB: false,
+                  devicesCount: 1 as const,
+                  role: null,
                 };
-                setState(advanceState(next, "devices_count"));
+                setState(advanceState(next, "location_time"));
               }}
             />
             <ModeCard
@@ -2222,79 +2612,225 @@ export function OngevalWizard({
         );
       case "witnesses":
         return (
-          <div className="flex flex-col gap-2 px-4 py-4">
-            <Field label={t(lang, "overview.section.witnesses")}>
-              <textarea
-                className="min-h-[120px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                placeholder={t(lang, "witnesses.placeholder")}
-                value={state.getuigen}
-                onChange={(e) => updateState({ getuigen: e.target.value })}
-              />
-            </Field>
-            <p className="text-[12px] text-[#5F7382]">
-              {t(lang, "witnesses.help")}
-            </p>
-          </div>
-        );
-      case "situation_main":
-        return (
-          <div className="mx-3 mt-2 mb-4 flex flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.07)]">
-            {SITUATION_CATEGORIES.map((cat) => {
-              const Icon = CATEGORY_ICONS[cat.id];
-              return (
-                <button
-                  key={cat.id}
+          <div className="flex flex-col gap-5 px-4 py-5">
+            <YesNoBlock
+              label={t(lang, "witnesses.question")}
+              value={state.hasGetuigen}
+              onChange={(v) => {
+                if (v === true && state.getuigenList.length === 0) {
+                  updateState({
+                    hasGetuigen: true,
+                    getuigenList: [{ voornaam: "", naam: "", telefoon: "" }],
+                  });
+                } else if (v === false) {
+                  updateState({ hasGetuigen: false, getuigenList: [] });
+                } else {
+                  updateState({ hasGetuigen: v });
+                }
+              }}
+              lang={lang}
+            />
+
+            {state.hasGetuigen === true ? (
+              <div className="flex flex-col gap-3">
+                {state.getuigenList.map((w, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-2 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-heading text-[13.5px] font-semibold text-[#163247]">
+                        {t(lang, "witnesses.entry_label")} {idx + 1}
+                      </p>
+                      {state.getuigenList.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateState({
+                              getuigenList: state.getuigenList.filter(
+                                (_, i) => i !== idx,
+                              ),
+                            })
+                          }
+                          className="flex size-8 items-center justify-center rounded-md text-[#B42318] transition hover:bg-[#FDECEE]"
+                          aria-label={t(lang, "witnesses.remove")}
+                        >
+                          <Trash2 className="size-4" strokeWidth={2} />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label={t(lang, "field.firstname")} required>
+                        <Input
+                          required
+                          value={w.voornaam}
+                          onChange={(e) => {
+                            const list = [...state.getuigenList];
+                            list[idx] = { ...list[idx], voornaam: e.target.value };
+                            updateState({ getuigenList: list });
+                          }}
+                        />
+                      </Field>
+                      <Field label={t(lang, "field.lastname")} required>
+                        <Input
+                          required
+                          value={w.naam}
+                          onChange={(e) => {
+                            const list = [...state.getuigenList];
+                            list[idx] = { ...list[idx], naam: e.target.value };
+                            updateState({ getuigenList: list });
+                          }}
+                        />
+                      </Field>
+                    </div>
+                    <Field label={t(lang, "witnesses.field_phone")}>
+                      <Input
+                        type="tel"
+                        inputMode="tel"
+                        value={w.telefoon}
+                        placeholder="+32 …"
+                        onChange={(e) => {
+                          const list = [...state.getuigenList];
+                          list[idx] = { ...list[idx], telefoon: e.target.value };
+                          updateState({ getuigenList: list });
+                        }}
+                      />
+                    </Field>
+                  </div>
+                ))}
+                <Button
                   type="button"
-                  onClick={() => {
-                    const sub = cat.id;
-                    let nextStep: OngevalStepId = "sit_rear_end";
-                    if (sub === "rear_end") nextStep = "sit_rear_end";
-                    else if (sub === "opposite") nextStep = "sit_center_line";
-                    else if (sub === "priority") nextStep = "sit_priority";
-                    else if (sub === "maneuver") nextStep = "sit_maneuver_a";
-                    else if (sub === "lane_change") nextStep = "sit_lane_change";
-                    else if (sub === "parking") nextStep = "sit_parking";
-                    else if (sub === "door") nextStep = "sit_door";
-                    else if (sub === "load") nextStep = "sit_load";
-                    setState(
-                      advanceState(
-                        {
-                          ...state,
-                          situationCategory: cat.id,
-                          situationDetailKey: null,
-                          maneuverAKey: null,
-                          maneuverBKey: null,
-                        },
-                        nextStep,
-                      ),
-                    );
-                  }}
-                  className="flex w-full items-start gap-3 border-b border-black/[0.05] px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-[#F7F9FC]/80 active:bg-[#E8F4FB]/50"
+                  variant="outline"
+                  onClick={() =>
+                    updateState({
+                      getuigenList: [
+                        ...state.getuigenList,
+                        { voornaam: "", naam: "", telefoon: "" },
+                      ],
+                    })
+                  }
+                  className="h-11 w-full justify-center gap-2 rounded-xl border-[#2799D7]/30 text-[14px] font-semibold text-[#2799D7] hover:bg-[#E8F4FB]"
                 >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10">
-                    <Icon className="size-6" strokeWidth={1.5} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-heading text-[15px] font-semibold text-[#163247]">
-                      {getCategoryLabel(cat.id, lang) || cat.title}
-                    </p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-[#5F7382]">
-                      {getCategoryDescription(cat.id, lang) || cat.description}
-                    </p>
-                  </div>
-                  <ChevronRight className="mt-1 size-5 shrink-0 text-[#2799D7]/35" />
-                </button>
-              );
-            })}
+                  <Plus aria-hidden="true" className="size-4" />
+                  {t(lang, "witnesses.add")}
+                </Button>
+              </div>
+            ) : null}
+
+            {state.hasGetuigen === false ? (
+              <p className="rounded-2xl border border-black/[0.06] bg-[#F4F8FB] px-4 py-3 text-[13px] text-[#5F7382]">
+                {t(lang, "witnesses.none_note")}
+              </p>
+            ) : null}
           </div>
         );
+      case "situation_main": {
+        const selected = new Set(state.situationCategories);
+        return (
+          <div className="flex flex-col gap-3 px-3 py-3">
+            <p className="px-1 text-[13px] leading-snug text-[#5F7382]">
+              {t(lang, "situation.multi_hint")}
+            </p>
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.07)]">
+              {SITUATION_CATEGORIES.map((cat) => {
+                const Icon = CATEGORY_ICONS[cat.id];
+                const isSelected = selected.has(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    onClick={() => {
+                      const next = new Set(state.situationCategories);
+                      if (next.has(cat.id)) next.delete(cat.id);
+                      else next.add(cat.id);
+                      const nextCats = Array.from(next);
+                      // Wanneer een categorie verdwijnt, ruimen we ook alle
+                      // bijhorende detail-/manoeuvre-keys op zodat we geen
+                      // wezen-data overhouden in de samenvatting/PDF.
+                      const detailsByCat: Record<string, string[]> = {
+                        parking: ["park_moving", "park_opening"],
+                        rear_end: ["a_rear", "b_rear"],
+                        priority: [
+                          "a_yield_x",
+                          "b_yield_x",
+                          "a_stop_x",
+                          "b_stop_x",
+                          "a_yield_round",
+                          "b_yield_round",
+                        ],
+                        lane_change: ["a_lane", "b_lane", "both_lane"],
+                        opposite: ["a_crossed", "b_crossed", "both_crossed"],
+                        door: ["door_a", "door_b"],
+                        load: ["load_a", "load_b"],
+                      };
+                      const removed = !next.has(cat.id);
+                      let nextDetails = state.situationDetailKeys;
+                      let nextManA = state.maneuverAKeys;
+                      let nextManB = state.maneuverBKeys;
+                      if (removed) {
+                        const drop = new Set(detailsByCat[cat.id] ?? []);
+                        if (drop.size > 0) {
+                          nextDetails = nextDetails.filter((k) => !drop.has(k));
+                        }
+                        if (cat.id === "maneuver") {
+                          nextManA = [];
+                          nextManB = [];
+                        }
+                      }
+                      updateState({
+                        situationCategories: nextCats,
+                        situationDetailKeys: nextDetails,
+                        maneuverAKeys: nextManA,
+                        maneuverBKeys: nextManB,
+                      });
+                    }}
+                    className={`flex w-full items-start gap-3 border-b border-black/[0.05] px-4 py-4 text-left transition-colors last:border-b-0 ${
+                      isSelected
+                        ? "bg-[#E8F4FB]/70"
+                        : "hover:bg-[#F7F9FC]/80 active:bg-[#E8F4FB]/50"
+                    }`}
+                  >
+                    <div
+                      aria-hidden="true"
+                      className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        isSelected
+                          ? "border-[#2799D7] bg-[#2799D7] text-white"
+                          : "border-[#CBD5DF] bg-white text-transparent"
+                      }`}
+                    >
+                      <Check className="size-3.5" strokeWidth={3} />
+                    </div>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10">
+                      <Icon className="size-6" strokeWidth={1.5} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-heading text-[15px] font-semibold text-[#163247]">
+                        {getCategoryLabel(cat.id, lang) || cat.title}
+                      </p>
+                      <p className="mt-0.5 text-[13px] leading-snug text-[#5F7382]">
+                        {getCategoryDescription(cat.id, lang) || cat.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
       case "sit_rear_end":
         return (
           <OptionList
             lang={lang}
             options={REAR_END_OPTIONS}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_center_line":
@@ -2302,8 +2838,12 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={CENTER_LINE_OPTIONS}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_priority":
@@ -2311,8 +2851,12 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={PRIORITY_OPTIONS}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_maneuver_a":
@@ -2320,16 +2864,20 @@ export function OngevalWizard({
           <div>
             <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
               {lang === "fr"
-                ? "Choisissez la manœuvre de la partie A"
+                ? "Choisissez les manœuvres de la partie A"
                 : lang === "en"
-                  ? "Choose the manoeuvre of party A"
-                  : "Kies de rijbeweging van partij A"}
+                  ? "Choose the manoeuvres of party A"
+                  : "Kies de rijbewegingen van partij A"}
             </p>
             <OptionList
               lang={lang}
               options={MANEUVER_A_OPTIONS}
-              selectedId={state.maneuverAKey}
-              onSelect={(id) => updateState({ maneuverAKey: id })}
+              selectedIds={state.maneuverAKeys}
+              onToggle={(id) =>
+                updateState({
+                  maneuverAKeys: toggleInList(state.maneuverAKeys, id),
+                })
+              }
             />
           </div>
         );
@@ -2338,16 +2886,20 @@ export function OngevalWizard({
           <div>
             <p className="border-b border-[#2799D7]/10 bg-[#F7F9FC] px-4 py-2.5 text-[13px] font-medium text-[#5F7382]">
               {lang === "fr"
-                ? "Choisissez la manœuvre de la partie B"
+                ? "Choisissez les manœuvres de la partie B"
                 : lang === "en"
-                  ? "Choose the manoeuvre of party B"
-                  : "Kies de rijbeweging van partij B"}
+                  ? "Choose the manoeuvres of party B"
+                  : "Kies de rijbewegingen van partij B"}
             </p>
             <OptionList
               lang={lang}
               options={MANEUVER_B_OPTIONS}
-              selectedId={state.maneuverBKey}
-              onSelect={(id) => updateState({ maneuverBKey: id })}
+              selectedIds={state.maneuverBKeys}
+              onToggle={(id) =>
+                updateState({
+                  maneuverBKeys: toggleInList(state.maneuverBKeys, id),
+                })
+              }
             />
           </div>
         );
@@ -2356,8 +2908,12 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={LANE_CHANGE_OPTIONS}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_parking":
@@ -2365,8 +2921,12 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={GENERIC_SINGLE.parking ?? []}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_door":
@@ -2374,8 +2934,12 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={GENERIC_SINGLE.door ?? []}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
         );
       case "sit_load":
@@ -2383,51 +2947,13 @@ export function OngevalWizard({
           <OptionList
             lang={lang}
             options={GENERIC_SINGLE.load ?? []}
-            selectedId={state.situationDetailKey}
-            onSelect={(id) => updateState({ situationDetailKey: id })}
+            selectedIds={state.situationDetailKeys}
+            onToggle={(id) =>
+              updateState({
+                situationDetailKeys: toggleInList(state.situationDetailKeys, id),
+              })
+            }
           />
-        );
-      case "proposal_intro":
-        return (
-          <div className="px-4 py-8">
-            <div className="mx-auto max-w-md rounded-2xl border border-[#2799D7]/12 bg-gradient-to-br from-[#F7F9FC] to-white px-4 py-6 shadow-sm">
-              <p className="text-center text-[15px] leading-relaxed text-[#163247]">
-                {t(lang, "proposal.section_title")}
-              </p>
-            </div>
-          </div>
-        );
-      case "proposal_decision":
-        return (
-          <div className="flex flex-col gap-4 px-4 py-10">
-            <p className="text-center text-[15px] text-[#163247]">
-              {t(lang, "proposal.question")}
-            </p>
-            <div className="flex justify-center gap-4">
-              <button
-                type="button"
-                onClick={() => updateState({ proposalAccepted: true })}
-                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
-                  state.proposalAccepted === true
-                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
-                }`}
-              >
-                {t(lang, "common.yes")}
-              </button>
-              <button
-                type="button"
-                onClick={() => updateState({ proposalAccepted: false })}
-                className={`min-h-[100px] min-w-[100px] rounded-full border-2 px-4 text-[17px] font-semibold transition-colors ${
-                  state.proposalAccepted === false
-                    ? "border-2 border-[#2799D7] bg-[#E8F4FB] text-[#163247] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                    : "border-2 border-[#DCE6EE] bg-white text-[#2799D7] hover:border-[#2799D7]/35"
-                }`}
-              >
-                {t(lang, "common.no")}
-              </button>
-            </div>
-          </div>
         );
       case "circumstances_manual":
         return (
@@ -2486,6 +3012,27 @@ export function OngevalWizard({
             onChange={(impactPartyA) => updateState({ impactPartyA })}
           />
         );
+      case "visible_damage_a":
+        return (
+          <div className="flex flex-col gap-3 px-4 py-6">
+            <p className="rounded-2xl border border-[#2799D7]/20 bg-[#E8F4FB] px-3 py-2 text-[12.5px] leading-snug text-[#163247]">
+              {t(lang, "visible_damage.intro_a")}
+            </p>
+            <Field label={t(lang, "visible_damage.label_a")}>
+              <textarea
+                className="min-h-[140px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder={t(lang, "visible_damage.placeholder")}
+                value={state.visibleDamagePartyA}
+                onChange={(e) =>
+                  updateState({ visibleDamagePartyA: e.target.value })
+                }
+              />
+            </Field>
+            <p className="px-1 text-[12px] text-[#5F7382]">
+              {t(lang, "visible_damage.optional_hint")}
+            </p>
+          </div>
+        );
       case "impact_party_b":
         return (
           <ImpactDiagram
@@ -2495,6 +3042,43 @@ export function OngevalWizard({
             value={state.impactPartyB}
             onChange={(impactPartyB) => updateState({ impactPartyB })}
           />
+        );
+      case "visible_damage_b":
+        return (
+          <div className="flex flex-col gap-3 px-4 py-6">
+            <p className="rounded-2xl border border-[#2799D7]/20 bg-[#E8F4FB] px-3 py-2 text-[12.5px] leading-snug text-[#163247]">
+              {t(lang, "visible_damage.intro_b")}
+            </p>
+            <Field label={t(lang, "visible_damage.label_b")}>
+              <textarea
+                className="min-h-[140px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder={t(lang, "visible_damage.placeholder")}
+                value={state.visibleDamagePartyB}
+                onChange={(e) =>
+                  updateState({ visibleDamagePartyB: e.target.value })
+                }
+              />
+            </Field>
+            <p className="px-1 text-[12px] text-[#5F7382]">
+              {t(lang, "visible_damage.optional_hint")}
+            </p>
+          </div>
+        );
+      case "accident_sketch":
+        return (
+          <div className="flex flex-col gap-3 px-4 py-6">
+            <p className="rounded-2xl border border-[#2799D7]/20 bg-[#E8F4FB] px-3 py-2 text-[12.5px] leading-snug text-[#163247]">
+              {t(lang, "sketch.intro")}
+            </p>
+            <SignaturePad
+              value={state.accidentSketch}
+              onChange={(accidentSketch) => updateState({ accidentSketch })}
+              className="min-h-[280px]"
+            />
+            <p className="px-1 text-[12px] text-[#5F7382]">
+              {t(lang, "sketch.optional_hint")}
+            </p>
+          </div>
         );
       case "overview_intro":
         return (
@@ -2562,7 +3146,7 @@ export function OngevalWizard({
                 storagePath={state.scanSubmission.storagePath}
                 lang={lang}
               />
-              <SendToFleetManagerSection
+              <AutoSendStatus
                 reportId={reportId}
                 lang={lang}
                 isPartyB={false}
@@ -2577,7 +3161,7 @@ export function OngevalWizard({
               guestSecret={guestSecret}
               lang={lang}
             />
-            <SendToFleetManagerSection
+            <AutoSendStatus
               reportId={reportId}
               lang={lang}
               isPartyB={state.role === "B" && state.devicesCount === 2}
@@ -2593,15 +3177,18 @@ export function OngevalWizard({
     if (stepId === "complete") {
       return (
         <WizardFooterButton
-          label={t(lang, "common.ok")}
+          label={t(lang, "complete.close")}
           disabled={saving}
           onClick={async () => {
             try {
               setSaving(true);
+              // De automatische verzending naar de fleetmanager (zie
+              // <AutoSendStatus />) zet de rij zelf op status='submitted' bij
+              // succes. We bewaren hier enkel de laatste payload-snapshot zodat
+              // niets verloren gaat als de verzending later opnieuw nodig is.
               const { error } = await supabase
                 .from("ongeval_aangiften")
                 .update({
-                  status: "completed",
                   payload: state as unknown as Record<string, unknown>,
                 })
                 .eq("id", reportId);
@@ -2609,7 +3196,7 @@ export function OngevalWizard({
               if (onRequestClose) {
                 onRequestClose();
               } else {
-                router.push(returnTo ?? "/chat");
+                router.push(returnTo ?? "/ongeval");
               }
             } catch (e) {
               console.error(e);
@@ -2663,7 +3250,6 @@ export function OngevalWizard({
       );
     }
     if (
-      stepId === "situation_main" ||
       stepId === "submission_mode" ||
       stepId === "scan_capture" ||
       stepId === "driver_select" ||
@@ -2745,7 +3331,9 @@ export function OngevalWizard({
             <Button variant="outline" onClick={() => setExitOpen(false)}>
               Annuleren
             </Button>
-            <Button onClick={confirmExit}>Sluiten</Button>
+            <Button variant="destructive" onClick={confirmExit}>
+              Sluiten
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -3060,12 +3648,32 @@ function Field({
   required?: boolean;
   children: React.ReactNode;
 }) {
+  // Mobile-first form field. Alle child inputs/textareas/selects krijgen via
+  // descendant-selectors een grotere, native-aanvoelende stijl:
+  // - h-12 (48px) → iOS/Android touch-target minimum
+  // - text-[16px] → voorkomt automatische zoom op iOS Safari bij focus
+  // - rounded-xl + iets dikker padding → voelt aan als een echte mobile input
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-[#5F7382]">
+    <label
+      className="flex flex-col gap-2
+        [&_input]:h-12 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-[#DCE6EE]
+        [&_input]:bg-white [&_input]:px-3.5 [&_input]:py-2 [&_input]:text-[16px] [&_input]:leading-tight [&_input]:text-[#163247]
+        [&_input]:shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]
+        [&_input::placeholder]:text-[#9AAEBE]
+        [&_input:focus-visible]:border-[#2799D7] [&_input:focus-visible]:ring-[3px] [&_input:focus-visible]:ring-[#2799D7]/15
+        [&_input:disabled]:bg-[#F5F8FB] [&_input:disabled]:text-[#7E8E9C]
+        [&_input[type='date']]:appearance-none [&_input[type='time']]:appearance-none
+        [&_textarea]:min-h-[96px] [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-[#DCE6EE]
+        [&_textarea]:bg-white [&_textarea]:px-3.5 [&_textarea]:py-3 [&_textarea]:text-[16px] [&_textarea]:leading-snug [&_textarea]:text-[#163247]
+        [&_textarea:focus-visible]:border-[#2799D7] [&_textarea:focus-visible]:ring-[3px] [&_textarea:focus-visible]:ring-[#2799D7]/15
+        [&_select]:h-12 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-[#DCE6EE]
+        [&_select]:bg-white [&_select]:px-3 [&_select]:text-[16px] [&_select]:text-[#163247]
+        [&_select:focus-visible]:border-[#2799D7] [&_select:focus-visible]:ring-[3px] [&_select:focus-visible]:ring-[#2799D7]/15"
+    >
+      <span className="text-[13.5px] font-semibold text-[#163247]">
         {label}
         {required ? (
-          <span className="ml-0.5 text-[#E11D2E]" aria-hidden>
+          <span className="ml-1 align-middle text-[#E11D2E]" aria-hidden>
             *
           </span>
         ) : null}
@@ -3126,12 +3734,14 @@ function ModeCard({
   description,
   comingSoon,
   onClick,
+  iconWrapClassName,
 }: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
   description: string;
   comingSoon?: boolean;
   onClick: () => void;
+  iconWrapClassName?: string;
 }) {
   return (
     <button
@@ -3139,7 +3749,12 @@ function ModeCard({
       onClick={onClick}
       className="group flex w-full items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 text-left shadow-[0_2px_12px_rgba(39,153,215,0.06)] transition-all hover:border-[#2799D7]/25 hover:shadow-[0_4px_20px_rgba(39,153,215,0.1)] active:scale-[0.995]"
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10">
+      <div
+        className={
+          iconWrapClassName ??
+          "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10"
+        }
+      >
         <Icon className="size-6" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 flex-1 pt-0.5">
@@ -3162,33 +3777,56 @@ function ModeCard({
   );
 }
 
+/** Voeg `id` toe of verwijder hem als hij al in de lijst stond. */
+function toggleInList(list: string[], id: string): string[] {
+  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+}
+
+/**
+ * Lijst met selecteerbare opties. Standaard multi-select: gebruiker kan
+ * meerdere vakjes aanvinken voor de huidige stap. De checkbox-stijl maakt
+ * meteen visueel duidelijk dat meerdere keuzes mogelijk zijn.
+ */
 function OptionList({
   options,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onToggle,
   lang = "nl",
 }: {
   options: { id: string; title: string; description: string }[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
   lang?: OngevalLang;
 }) {
+  const selectedSet = new Set(selectedIds);
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-3 px-4 py-6 md:max-w-2xl">
       {options.map((o) => {
-        const selected = selectedId === o.id;
+        const selected = selectedSet.has(o.id);
         const title = getDetailLabel(o.id, lang) || o.title;
         return (
           <button
             key={o.id}
             type="button"
-            onClick={() => onSelect(o.id)}
+            role="checkbox"
+            aria-checked={selected}
+            onClick={() => onToggle(o.id)}
             className={`group flex w-full items-start gap-3 rounded-2xl border px-4 py-4 text-left transition-all active:scale-[0.995] ${
               selected
                 ? "border-[#2799D7]/35 bg-[#E8F4FB]/90 shadow-[0_4px_20px_rgba(39,153,215,0.12)] ring-2 ring-[#2799D7]/20"
                 : "border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.06)] hover:border-[#2799D7]/25 hover:shadow-[0_4px_20px_rgba(39,153,215,0.1)]"
             }`}
           >
+            <div
+              aria-hidden="true"
+              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                selected
+                  ? "border-[#2799D7] bg-[#2799D7] text-white"
+                  : "border-[#CBD5DF] bg-white text-transparent group-hover:border-[#2799D7]/55"
+              }`}
+            >
+              <Check className="size-3.5" strokeWidth={3} />
+            </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="font-heading text-[15px] font-semibold leading-tight text-[#163247]">
                 {title}
@@ -3199,13 +3837,6 @@ function OptionList({
                 </p>
               ) : null}
             </div>
-            <ChevronRight
-              className={`mt-1 size-5 shrink-0 transition group-hover:translate-x-0.5 ${
-                selected
-                  ? "text-[#2799D7]"
-                  : "text-[#2799D7]/35 group-hover:text-[#2799D7]/55"
-              }`}
-            />
           </button>
         );
       })}
@@ -3252,42 +3883,43 @@ function OverviewTabs({
       <div className="flex overflow-x-auto border-b border-black/[0.08] bg-white px-2">
         {(
           [
-            ["locatie", t(lang, "overview.tab.location")],
-            ["vragen", t(lang, "overview.tab.questions")],
-            ["raakpunt", t(lang, "overview.tab.impact")],
-            ["getuigen", t(lang, "overview.tab.witnesses")],
-            ["gegevens", t(lang, "overview.tab.data")],
+            ["locatie", t(lang, "overview.tab.location"), MapPin],
+            ["vragen", t(lang, "overview.tab.questions"), ClipboardList],
+            ["raakpunt", t(lang, "overview.tab.impact"), TbCarCrash],
+            ["getuigen", t(lang, "overview.tab.witnesses"), Users],
+            ["gegevens", t(lang, "overview.tab.data"), UserCircle],
           ] as const
-        ).map(([id, label]) => (
+        ).map(([id, label, Icon]) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`min-h-11 flex-shrink-0 flex-1 border-b-2 px-2 py-2 text-[13px] font-medium ${
+            className={`flex min-h-11 flex-shrink-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 py-2 text-[13px] font-medium ${
               tab === id
                 ? "border-[#2799D7] text-[#2799D7]"
                 : "border-transparent text-[#5F7382]"
             }`}
           >
-            {label}
+            <Icon className="size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">{label}</span>
           </button>
         ))}
       </div>
       <div className="flex-1 space-y-4 px-4 py-4">
         {tab === "locatie" ? (
           <>
-            <Section title={t(lang, "overview.section.place")}>
+            <Section title={t(lang, "overview.section.place")} icon={MapPin}>
               <Row label={t(lang, "field.street")} value={loc.straat} />
               <Row label={t(lang, "field.housenumber")} value={loc.huisnummer} />
               <Row label={t(lang, "field.postcode")} value={loc.postcode} />
               <Row label={t(lang, "field.city")} value={loc.stad} />
               <Row label={t(lang, "field.country")} value={loc.land} />
             </Section>
-            <Section title={t(lang, "overview.section.time")}>
+            <Section title={t(lang, "overview.section.time")} icon={Clock}>
               <Row label={t(lang, "field.date")} value={formatDateForDisplay(loc.datum)} />
               <Row label={t(lang, "field.time")} value={formatTimeForDisplay(loc.tijd)} />
             </Section>
-            <Section title={t(lang, "overview.section.damage")}>
+            <Section title={t(lang, "overview.section.damage")} icon={ShieldAlert}>
               <Row
                 label={t(lang, "overview.row.injuries")}
                 value={yesNo(state.gewonden) ?? notSpecified}
@@ -3301,53 +3933,65 @@ function OverviewTabs({
         ) : null}
         {tab === "vragen" ? (
           <>
-            <Section title={t(lang, "overview.section.accident_type")}>
+            <Section title={t(lang, "overview.section.accident_type")} icon={GoTasklist}>
               <Row
                 label={t(lang, "overview.row.category")}
                 value={
-                  getCategoryLabel(state.situationCategory, lang) ||
-                  t(lang, "overview.empty.category")
+                  state.situationCategories.length > 0
+                    ? state.situationCategories
+                        .map((c) => getCategoryLabel(c, lang))
+                        .filter(Boolean)
+                        .join(" • ")
+                    : t(lang, "overview.empty.category")
                 }
               />
               <Row
                 label={t(lang, "overview.row.detail")}
                 value={
-                  getDetailLabel(state.situationDetailKey, lang) ||
-                  t(lang, "overview.empty.detail")
+                  state.situationDetailKeys.length > 0
+                    ? state.situationDetailKeys
+                        .map((k) => getDetailLabel(k, lang))
+                        .filter(Boolean)
+                        .join(" • ")
+                    : t(lang, "overview.empty.detail")
                 }
               />
-              {state.situationCategory === "maneuver" ? (
+              {state.situationCategories.includes("maneuver") ? (
                 <>
                   <Row
                     label={t(lang, "overview.row.maneuver_a")}
                     value={
-                      getDetailLabel(state.maneuverAKey, lang) ||
-                      t(lang, "overview.empty.maneuver_a")
+                      state.maneuverAKeys.length > 0
+                        ? state.maneuverAKeys
+                            .map((k) => getDetailLabel(k, lang))
+                            .filter(Boolean)
+                            .join(" • ")
+                        : t(lang, "overview.empty.maneuver_a")
                     }
                   />
                   <Row
                     label={t(lang, "overview.row.maneuver_b")}
                     value={
-                      getDetailLabel(state.maneuverBKey, lang) ||
-                      t(lang, "overview.empty.maneuver_b")
+                      state.maneuverBKeys.length > 0
+                        ? state.maneuverBKeys
+                            .map((k) => getDetailLabel(k, lang))
+                            .filter(Boolean)
+                            .join(" • ")
+                        : t(lang, "overview.empty.maneuver_b")
                     }
                   />
                 </>
               ) : null}
             </Section>
-            <Section title={t(lang, "overview.section.proposal")}>
-              <Row
-                label={t(lang, "overview.row.proposal_accepted")}
-                value={yesNo(state.proposalAccepted) ?? t(lang, "overview.empty.proposal")}
-              />
-              {state.proposalAccepted === false ? (
+            {state.circumstancesNotes.trim().length > 0 ? (
+              <Section title={t(lang, "overview.section.proposal")} icon={Pencil}>
                 <Row
                   label={t(lang, "overview.row.circumstances")}
-                  value={state.circumstancesNotes || t(lang, "overview.empty.proposal_notes")}
+                  value={state.circumstancesNotes}
                 />
-              ) : null}
-            </Section>
-            <Section title={t(lang, "overview.section.vehicle_contact")}>
+              </Section>
+            ) : null}
+            <Section title={t(lang, "overview.section.vehicle_contact")} icon={TbCarCrash}>
               <Row
                 label={t(lang, "overview.row.contact")}
                 value={yesNo(state.vehicleContact) ?? notSpecified}
@@ -3357,20 +4001,44 @@ function OverviewTabs({
         ) : null}
         {tab === "raakpunt" ? (
           <>
-            <Section title={t(lang, "overview.section.impact_a")}>
+            <Section title={t(lang, "overview.section.impact_a")} icon={TbCarCrash}>
               <OverviewImpactPreview party="A" point={state.impactPartyA} lang={lang} />
             </Section>
-            <Section title={t(lang, "overview.section.impact_b")}>
+            <Section title={t(lang, "overview.section.impact_b")} icon={TbCarCrash}>
               <OverviewImpactPreview party="B" point={state.impactPartyB} lang={lang} />
             </Section>
           </>
         ) : null}
         {tab === "getuigen" ? (
-          <Section title={t(lang, "overview.section.witnesses")}>
-            {state.getuigen?.trim() ? (
-              <p className="whitespace-pre-wrap text-[14px] text-[#163247]">
-                {state.getuigen}
+          <Section title={t(lang, "overview.section.witnesses")} icon={Users}>
+            {state.hasGetuigen === false ? (
+              <p className="text-[14px] text-[#163247]">
+                {t(lang, "overview.witnesses.none")}
               </p>
+            ) : state.getuigenList.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {state.getuigenList.map((w, idx) => {
+                  const name = [w.voornaam, w.naam]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  return (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-black/[0.06] bg-white px-3 py-2"
+                    >
+                      <p className="text-[14px] font-semibold text-[#163247]">
+                        {name || notFilled}
+                      </p>
+                      {w.telefoon ? (
+                        <p className="text-[12.5px] text-[#5F7382]">
+                          {w.telefoon}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <p className="text-[14px] italic text-[#5F7382]">
                 {t(lang, "overview.empty.witnesses")}
@@ -3380,7 +4048,7 @@ function OverviewTabs({
         ) : null}
         {tab === "gegevens" ? (
           <>
-            <Section title={t(lang, "overview.section.driver_a")}>
+            <Section title={t(lang, "overview.section.driver_a")} icon={UserCircle}>
               <Row label={t(lang, "field.lastname")} value={personLine(state.partyA.bestuurder) || notFilled} />
               <Row
                 label={t(lang, "field.birthdate")}
@@ -3394,21 +4062,21 @@ function OverviewTabs({
               <Row label={t(lang, "overview.row.license")} value={state.partyA.bestuurder.rijbewijsNummer || notFilled} />
               <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyA.bestuurder.adres) || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.vehicle_a")}>
+            <Section title={t(lang, "overview.section.vehicle_a")} icon={Car}>
               <Row label={t(lang, "field.make_model")} value={state.partyA.voertuig.merkModel || notFilled} />
               <Row label={t(lang, "field.plate")} value={state.partyA.voertuig.nummerplaat || notFilled} />
               <Row label={t(lang, "field.country")} value={state.partyA.voertuig.landInschrijving || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.insurance_a")}>
+            <Section title={t(lang, "overview.section.insurance_a")} icon={BadgeCheck}>
               <Row label={t(lang, "overview.row.company")} value={state.partyA.verzekering.maatschappij || notFilled} />
               <Row label={t(lang, "overview.row.policy")} value={state.partyA.verzekering.polisnummer || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.holder_a")}>
+            <Section title={t(lang, "overview.section.holder_a")} icon={Building2}>
               <Row label={t(lang, "field.lastname")} value={personLine(state.partyA.verzekeringsnemer) || notFilled} />
               <Row label={t(lang, "overview.row.enterprise")} value={state.partyA.verzekeringsnemer.ondernemingsnummer || t(lang, "common.dash")} />
               <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyA.verzekeringsnemer.adres) || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.driver_b")}>
+            <Section title={t(lang, "overview.section.driver_b")} icon={UserCircle}>
               <Row label={t(lang, "field.lastname")} value={personLine(state.partyB.bestuurder) || notFilled} />
               <Row
                 label={t(lang, "field.birthdate")}
@@ -3422,16 +4090,16 @@ function OverviewTabs({
               <Row label={t(lang, "overview.row.license")} value={state.partyB.bestuurder.rijbewijsNummer || notFilled} />
               <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyB.bestuurder.adres) || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.vehicle_b")}>
+            <Section title={t(lang, "overview.section.vehicle_b")} icon={Car}>
               <Row label={t(lang, "field.make_model")} value={state.partyB.voertuig.merkModel || notFilled} />
               <Row label={t(lang, "field.plate")} value={state.partyB.voertuig.nummerplaat || notFilled} />
               <Row label={t(lang, "field.country")} value={state.partyB.voertuig.landInschrijving || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.insurance_b")}>
+            <Section title={t(lang, "overview.section.insurance_b")} icon={BadgeCheck}>
               <Row label={t(lang, "overview.row.company")} value={state.partyB.verzekering.maatschappij || notFilled} />
               <Row label={t(lang, "overview.row.policy")} value={state.partyB.verzekering.polisnummer || notFilled} />
             </Section>
-            <Section title={t(lang, "overview.section.holder_b")}>
+            <Section title={t(lang, "overview.section.holder_b")} icon={Building2}>
               <Row label={t(lang, "field.lastname")} value={personLine(state.partyB.verzekeringsnemer) || notFilled} />
               <Row label={t(lang, "overview.row.address")} value={addressLine(state.partyB.verzekeringsnemer.adres) || notFilled} />
             </Section>
@@ -3473,17 +4141,27 @@ function OverviewImpactPreview({
   );
 }
 
+type SectionIcon = React.ComponentType<{
+  className?: string;
+  "aria-hidden"?: boolean | "true" | "false";
+}>;
+
 function Section({
   title,
+  icon: Icon,
   children,
 }: {
   title: string;
+  icon?: SectionIcon;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="mb-2 rounded-lg border border-[#2799D7]/10 bg-[#E8F4FB]/60 px-3 py-1.5 text-[13px] font-semibold text-[#163247]">
-        {title}
+      <div className="mb-2 flex items-center gap-2 rounded-lg border border-[#2799D7]/10 bg-[#E8F4FB]/60 px-3 py-1.5 text-[13px] font-semibold text-[#163247]">
+        {Icon ? (
+          <Icon className="size-4 shrink-0 text-[#2799D7]" aria-hidden="true" />
+        ) : null}
+        <span className="min-w-0 truncate">{title}</span>
       </div>
       <div className="space-y-2">{children}</div>
     </div>
@@ -3641,7 +4319,13 @@ function sendErrorMessage(lang: OngevalLang, key: string | null): string {
   }
 }
 
-function SendToFleetManagerSection({
+/**
+ * Verstuurt de aangifte automatisch naar de fleetmanager wanneer de complete-
+ * stap voor het eerst gemount wordt (enkel partij A). De wizard toont enkel
+ * de status; bij mislukking is er een retry-knop. Definitieve afwerking + de
+ * herverzendknop met statusbadge zit op /ongeval ("Mijn incidenten").
+ */
+function AutoSendStatus({
   reportId,
   lang,
   isPartyB,
@@ -3650,7 +4334,7 @@ function SendToFleetManagerSection({
   lang: OngevalLang;
   isPartyB: boolean;
 }) {
-  const [status, setStatus] = useState<SendStatus>("idle");
+  const [status, setStatus] = useState<SendStatus>(isPartyB ? "idle" : "sending");
   const [recipient, setRecipient] = useState<string | null>(null);
   const [cc, setCc] = useState<string | null>(null);
   const [simulated, setSimulated] = useState(false);
@@ -3685,95 +4369,132 @@ function SendToFleetManagerSection({
     }
   }, [reportId]);
 
+  // Auto-fire één keer bij mount voor partij A. Partij B mag niet versturen
+  // (server geeft anders 403 — zie sendAccidentReport). De state initialiseert
+  // hierboven al op "sending"; we plannen de fetch in een setTimeout zodat de
+  // setState-calls in send() buiten de effect-tick vallen (lint-vriendelijk).
+  const fired = useRef(false);
+  useEffect(() => {
+    if (isPartyB) return;
+    if (fired.current) return;
+    fired.current = true;
+    const handle = setTimeout(() => {
+      void send();
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [isPartyB, send]);
+
   if (isPartyB) {
     return (
-      <div className="mx-4 mb-6 rounded-2xl border border-black/[0.06] bg-[#F4F8FB] px-4 py-3 text-[13px] text-[#5F7382]">
+      <p
+        role="status"
+        className="mx-4 mb-6 px-4 text-center text-[13px] leading-snug text-[#5F7382]"
+      >
         {t(lang, "send.b.waiting")}
+      </p>
+    );
+  }
+
+  if (status === "sending") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mx-4 mb-6 flex flex-col items-center gap-3 px-4 py-4"
+      >
+        <div className="relative h-9 w-full max-w-sm overflow-hidden">
+          <span
+            aria-hidden
+            className="absolute inset-x-0 bottom-1.5 h-px bg-gradient-to-r from-transparent via-[#2799D7]/35 to-transparent"
+          />
+          <FaCarSide
+            aria-hidden
+            className="absolute bottom-1 h-7 w-7 text-[#2799D7] [animation:wizardSendCar_2.4s_linear_infinite] motion-reduce:animate-none"
+          />
+        </div>
+        <p className="text-center text-[14px] font-medium text-[#163247]">
+          {t(lang, "send.sending")}
+        </p>
+        <style>{`@keyframes wizardSendCar{0%{left:-28px}100%{left:100%}}`}</style>
       </div>
     );
   }
 
-  return (
-    <div className="mx-4 mb-6 flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-sm">
-      <div className="flex items-center gap-2">
-        <Send className="size-4 text-[#2799D7]" strokeWidth={2} />
-        <p className="font-heading text-[15px] font-semibold text-[#163247]">
-          {t(lang, "send.title")}
+  if (status === "sent") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mx-4 mb-6 flex flex-col items-center gap-2 px-4 py-4 text-center"
+      >
+        <span
+          aria-hidden
+          className="flex size-10 items-center justify-center rounded-full bg-[#1F8A4C]/12 text-[#1F8A4C]"
+        >
+          <Check className="size-5" strokeWidth={3} />
+        </span>
+        <p className="text-[14px] font-semibold text-[#15613A]">
+          {t(lang, "send.success_title")}
         </p>
-      </div>
-      {status !== "sent" ? (
-        <p className="text-[12.5px] leading-snug text-[#5F7382]">
-          {t(lang, "send.intro")}
-        </p>
-      ) : null}
-
-      {status === "sent" ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-[#1F8A4C]/30 bg-[#E8F7EE] px-3 py-3">
-          <div className="flex items-center gap-2 text-[#1F8A4C]">
-            <Check className="size-4" strokeWidth={2.5} />
-            <p className="font-heading text-[14px] font-semibold">
-              {t(lang, "send.success_title")}
-            </p>
-          </div>
-          {recipient ? (
-            <p className="text-[12.5px] leading-snug text-[#205437]">
-              <span className="font-medium">{t(lang, "send.success_to")}</span>{" "}
-              {recipient}
-            </p>
-          ) : null}
-          {cc ? (
-            <p className="text-[12.5px] leading-snug text-[#205437]">
-              <span className="font-medium">{t(lang, "send.success_cc")}</span>{" "}
-              {cc}
-            </p>
-          ) : null}
-          {simulated ? (
-            <p className="rounded-md bg-white/60 px-2 py-1 text-[11.5px] text-[#7A5A00]">
-              {t(lang, "send.success_simulated")}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {status === "failed" ? (
-        <div className="flex flex-col gap-1.5 rounded-xl border border-[#E11D2E]/30 bg-[#FDECEE] px-3 py-3">
-          <div className="flex items-center gap-2 text-[#B42318]">
-            <X className="size-4" strokeWidth={2.5} />
-            <p className="font-heading text-[14px] font-semibold">
-              {t(lang, "send.failure_title")}
-            </p>
-          </div>
-          <p className="text-[12.5px] leading-snug text-[#7A1F18]">
-            {sendErrorMessage(lang, errorKey)}
+        {recipient ? (
+          <p className="max-w-md break-all text-[12.5px] leading-snug text-[#5F7382]">
+            <span className="text-[#163247]/65">
+              {t(lang, "send.success_to")}
+            </span>{" "}
+            <span className="font-medium text-[#163247]">{recipient}</span>
           </p>
-          {errorDetail && errorKey !== "no_recipient" ? (
-            <p className="text-[11px] text-[#7A1F18]/80">{errorDetail}</p>
-          ) : null}
-        </div>
-      ) : null}
+        ) : null}
+        {cc ? (
+          <p className="max-w-md break-all text-[12px] leading-snug text-[#5F7382]">
+            <span className="text-[#163247]/55">
+              {t(lang, "send.success_cc")}
+            </span>{" "}
+            {cc}
+          </p>
+        ) : null}
+        {simulated ? (
+          <p className="inline-flex rounded-md bg-[#FFF6E5] px-2 py-0.5 text-[11px] font-medium text-[#7A5A00]">
+            {t(lang, "send.success_simulated")}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
-      {status !== "sending" ? (
-        <Button
-          type="button"
-          onClick={() => void send()}
-          disabled={status === "sent"}
-          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white shadow-sm hover:bg-[#1e7bb0] active:bg-[#1a6a9a] disabled:opacity-60"
-        >
-          <Send aria-hidden="true" />
-          {status === "failed"
-            ? t(lang, "send.button_retry")
-            : t(lang, "send.button")}
-        </Button>
-      ) : (
-        <Button
-          type="button"
-          disabled
-          className="h-12 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[15px] font-semibold text-white opacity-80"
-        >
-          <RefreshCw className="size-4 animate-spin" aria-hidden="true" />
-          {t(lang, "send.sending")}
-        </Button>
-      )}
+  // status === "failed"
+  return (
+    <div
+      role="alert"
+      className="mx-4 mb-6 flex flex-col items-center gap-2 px-4 py-4 text-center"
+    >
+      <span
+        aria-hidden
+        className="flex size-10 items-center justify-center rounded-full bg-[#B42318]/12 text-[#B42318]"
+      >
+        <X className="size-5" strokeWidth={3} />
+      </span>
+      <p className="text-[14px] font-semibold text-[#7A1F18]">
+        {t(lang, "send.failure_title")}
+      </p>
+      <p className="max-w-md text-[12.5px] leading-snug text-[#5F7382]">
+        {sendErrorMessage(lang, errorKey)}
+      </p>
+      {errorDetail && errorKey !== "no_recipient" ? (
+        <p className="max-w-md text-[11px] leading-snug text-[#5F7382]/85">
+          {errorDetail}
+        </p>
+      ) : null}
+      <p className="max-w-md text-[11.5px] leading-snug text-[#5F7382]/85">
+        {t(lang, "send.retry_hint")}
+      </p>
+      <button
+        type="button"
+        onClick={() => void send()}
+        className="mt-2 inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#2799D7] px-4 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e7bb0] active:bg-[#1a6a9a]"
+      >
+        <RefreshCw className="size-3.5" aria-hidden />
+        {t(lang, "send.button_retry")}
+      </button>
     </div>
   );
 }

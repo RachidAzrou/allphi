@@ -189,14 +189,21 @@ async function drawImpactBox(
 /**
  * Rode neerwaartse pijl met de tip exact op (px, py). Schacht erboven, vlag
  * eronder uit de tip — visueel hetzelfde als de pijl in de wizard.
+ * `scale` schaalt alle dimensies (1 = standaardgrootte voor de samenvatting,
+ * ~0.45 voor de kleine vakjes in sectie 10 van het officiële sjabloon).
  */
-function drawImpactArrow(page: PDFPage, px: number, py: number) {
+function drawImpactArrow(
+  page: PDFPage,
+  px: number,
+  py: number,
+  scale = 1,
+) {
   const red = rgb(0.88, 0.11, 0.18);
   const dark = rgb(0.48, 0.04, 0.08);
-  const shaftW = 2.6;
-  const shaftH = 12;
-  const headH = 10;
-  const headHalfW = 6;
+  const shaftW = 2.6 * scale;
+  const shaftH = 12 * scale;
+  const headH = 10 * scale;
+  const headHalfW = 6 * scale;
   // Driehoekige pijlpunt: tip op (px, py), basis `headH` pt boven de tip.
   // pdf-lib past intern `scale(1, -1)` toe op SVG-paden, dus negatieve y in de
   // path-string betekent in pagina-coördinaten omhoog (gewenst).
@@ -220,6 +227,24 @@ function drawImpactArrow(page: PDFPage, px: number, py: number) {
     borderColor: dark,
     borderWidth: 0.4,
   });
+}
+
+/**
+ * Teken de impact-pijl in een sectie 10-vakje van het officiële sjabloon.
+ * `box` is de silhouet-clipping rechthoek (in PDF-coördinaten), en `point` is
+ * het door de wizard genormaliseerde raakpunt (x ∈ [0,1] van links naar
+ * rechts, y ∈ [0,1] van boven naar onder). Geen punt → geen pijl.
+ */
+function drawTemplateImpactArrow(
+  page: PDFPage,
+  box: { x: number; y: number; w: number; h: number },
+  point: { x: number; y: number } | null,
+) {
+  if (!point) return;
+  const px = box.x + Math.max(0, Math.min(1, point.x)) * box.w;
+  // Wizard gebruikt y=0 boven; PDF y=0 onder → inverteren.
+  const py = box.y + (1 - Math.max(0, Math.min(1, point.y))) * box.h;
+  drawImpactArrow(page, px, py, 0.45);
 }
 
 
@@ -251,41 +276,29 @@ function computeCheckboxes(state: AccidentReportState): {
 } {
   const a = new Set<number>();
   const b = new Set<number>();
-  const addOne = (
-    target: Set<number>,
-    options: Set<number>,
-    n: number,
-  ) => {
-    if (options.has(n)) target.add(n);
-  };
 
-  // Detail-key → kandidaat-vakje(s) voor degene die het deed (actief).
-  // Voor passieve rol (andere partij) laten we leeg, tenzij hieronder expliciet.
-  const cat = state.situationCategory;
-  const d = state.situationDetailKey;
+  // Multi-select: gebruiker kan in één aangifte meerdere categorieën én
+  // meerdere details per categorie aanvinken. We mappen elke detail-key
+  // onafhankelijk op een vakje (1–17) per partij.
+  const cats = new Set(state.situationCategories);
+  const details = new Set(state.situationDetailKeys);
 
-  if (cat === "parking") {
-    // park_moving: een van de partijen stond geparkeerd. We kunnen niet met
-    // zekerheid zeggen welke — markeer op beide kanten #1 zodat de verzekeraar
-    // het ziet. park_opening: iemand reed weg uit parkeerstand (vakje #2).
-    if (d === "park_moving") {
+  if (cats.has("parking")) {
+    if (details.has("park_moving")) {
       a.add(1);
       b.add(1);
-    } else if (d === "park_opening") {
+    }
+    if (details.has("park_opening")) {
       a.add(2);
       b.add(2);
     }
   }
-  if (cat === "rear_end") {
-    // Op achterzijde = vakje #8. Voor het geraakte voertuig (passief) ook #8.
-    if (d === "a_rear") {
-      a.add(8);
-    } else if (d === "b_rear") {
-      b.add(8);
-    }
+  if (cats.has("rear_end")) {
+    if (details.has("a_rear")) a.add(8);
+    if (details.has("b_rear")) b.add(8);
   }
-  if (cat === "maneuver") {
-    const mapMan = (key: string | null): number | null => {
+  if (cats.has("maneuver")) {
+    const mapMan = (key: string): number | null => {
       switch (key) {
         case "a_rev":
         case "b_rev":
@@ -298,51 +311,63 @@ function computeCheckboxes(state: AccidentReportState): {
           return 4; // uitrit/onverharde weg
         case "a_turn_back":
         case "b_turn":
-          return 13; // ging linksaf (draai terug ≈ keerbeweging, best benadering)
+          return 13; // ging linksaf (≈ keerbeweging)
         default:
           return null;
       }
     };
-    const aN = mapMan(state.maneuverAKey);
-    const bN = mapMan(state.maneuverBKey);
-    if (aN) a.add(aN);
-    if (bN) b.add(bN);
+    for (const k of state.maneuverAKeys) {
+      const n = mapMan(k);
+      if (n) a.add(n);
+    }
+    for (const k of state.maneuverBKeys) {
+      const n = mapMan(k);
+      if (n) b.add(n);
+    }
   }
-  if (cat === "priority") {
-    // "lette niet op voorrangsteken of rode licht" = #17.
-    // Rotonde variant = #6 of #7.
-    const onRound = d === "a_yield_round" || d === "b_yield_round";
-    const target = d?.startsWith("a_") ? a : b;
-    target.add(onRound ? 6 : 17);
-    if (onRound) target.add(7);
+  if (cats.has("priority")) {
+    for (const d of state.situationDetailKeys) {
+      const isA = d.startsWith("a_");
+      const isB = d.startsWith("b_");
+      if (!isA && !isB) continue;
+      const target = isA ? a : b;
+      if (d === "a_yield_round" || d === "b_yield_round") {
+        // Rotonde: vakjes #6 en #7.
+        target.add(6);
+        target.add(7);
+      } else if (
+        d === "a_yield_x" ||
+        d === "b_yield_x" ||
+        d === "a_stop_x" ||
+        d === "b_stop_x"
+      ) {
+        // Kruispunt: vakje #17 (voorrangsteken/rode licht).
+        target.add(17);
+      }
+    }
   }
-  if (cat === "lane_change") {
-    // Vakje #10 (veranderde van rijstrook).
-    if (d === "a_lane") a.add(10);
-    if (d === "b_lane") b.add(10);
-    if (d === "both_lane") {
+  if (cats.has("lane_change")) {
+    if (details.has("a_lane")) a.add(10);
+    if (details.has("b_lane")) b.add(10);
+    if (details.has("both_lane")) {
       a.add(10);
       b.add(10);
     }
   }
-  if (cat === "opposite") {
-    // #15: kwam op rijbaan bestemd voor tegemoetkomend verkeer.
-    if (d === "a_crossed") a.add(15);
-    if (d === "b_crossed") b.add(15);
-    if (d === "both_crossed") {
+  if (cats.has("opposite")) {
+    if (details.has("a_crossed")) a.add(15);
+    if (details.has("b_crossed")) b.add(15);
+    if (details.has("both_crossed")) {
       a.add(15);
       b.add(15);
     }
   }
-  if (cat === "door") {
-    if (d === "door_a") a.add(2); // deed een portier open
-    if (d === "door_b") b.add(2);
+  if (cats.has("door")) {
+    if (details.has("door_a")) a.add(2);
+    if (details.has("door_b")) b.add(2);
   }
-  // load: geen goed passend vakje in de 17 — we skippen en vertrouwen op 14.
+  // load: geen passend vakje in de 17 — bewust niet aangevinkt.
 
-  // Voorkom runtime-waarschuwing: variabele `addOne` wordt behouden voor
-  // toekomstige uitbreiding (set-intersectie) zonder te ontbreken in output.
-  void addOne;
   return { a, b };
 }
 
@@ -384,6 +409,17 @@ const TEMPLATE_PAGE_1 = {
     { x: 215, y: 763, maxWidth: 350 },
     { x: 215, y: 751, maxWidth: 350 },
   ],
+  // Sectie 10 — "Geef met een pijl aan waar het voertuig … het eerst werd
+  // geraakt". Coördinaten van de silhouet-clipping rechthoeken op het officiële
+  // sjabloon (96.9 x 71.87 pt). De wizard-coördinaten (genormaliseerd 0..1) op
+  // dezelfde silhouet-tekening worden hier 1-op-1 toegepast.
+  impactBoxA: { x: 16.8, y: 137.56, w: 96.9, h: 71.87 },
+  impactBoxB: { x: 470.99, y: 137.56, w: 96.9, h: 71.87 },
+  // Sectie 13 — schets (groot wit middenvlak boven de notes). Geëxtraheerd uit
+  // het sjabloon: rect x=118.78 y=79.69 w=345.37 h=161.65. We gebruiken een
+  // smalle binnenmarge voor de schets zelf zodat tekst/border van het sjabloon
+  // niet overschreven worden.
+  sketchBox: { x: 122, y: 82, w: 338, h: 156 },
 } as const;
 
 /** Coördinaten van de linkerkolom (Partij A). */
@@ -422,6 +458,16 @@ const COL_A = {
     rijbewijs: { x: 64, y: 280.1 },
     categorie: { x: 92, y: 267.5 },
     validTo: { x: 88, y: 254.8 },
+  },
+  // Sectie 11 — zichtbare schade (klein blokje rechts onder de impact-doos,
+  // h=50.66pt). Box: x=14.61 y=79.55 w=100.49. We geven 3 regels schrijf-
+  // ruimte van boven naar beneden (~14pt verticale stap, 9pt font).
+  visibleDamage: {
+    lines: [
+      { x: 18, y: 116, maxWidth: 94 },
+      { x: 18, y: 104, maxWidth: 94 },
+      { x: 18, y: 92, maxWidth: 94 },
+    ],
   },
   // Sectie 14 — opmerkingen (3 regels onderaan).
   notes: {
@@ -471,6 +517,13 @@ const COL_B = {
     rijbewijs: { x: 426, y: 280.1 },
     categorie: { x: 454, y: 267.5 },
     validTo: { x: 451, y: 254.8 },
+  },
+  visibleDamage: {
+    lines: [
+      { x: 472, y: 116, maxWidth: 94 },
+      { x: 472, y: 104, maxWidth: 94 },
+      { x: 472, y: 92, maxWidth: 94 },
+    ],
   },
   notes: {
     lines: [
@@ -624,6 +677,7 @@ type ColLayout = {
     categorie: PointXY;
     validTo: PointXY;
   };
+  visibleDamage: { lines: readonly PointWithWidth[] };
   notes: { lines: readonly PointWithWidth[] };
   signature: { x: number; y: number; w: number; h: number };
 };
@@ -709,6 +763,23 @@ function fillPartyBlock(
     col.vehicle.country.y,
     { font, size: 9 },
   );
+  // Aanhangwagen (optioneel).
+  if (party.voertuig.aanhanger) {
+    drawText(
+      page,
+      safe(party.voertuig.aanhanger.nummerplaat),
+      col.vehicle.trailerPlate.x,
+      col.vehicle.trailerPlate.y,
+      { font, size: 9 },
+    );
+    drawText(
+      page,
+      safe(party.voertuig.aanhanger.landInschrijving),
+      col.vehicle.trailerCountry.x,
+      col.vehicle.trailerCountry.y,
+      { font, size: 9 },
+    );
+  }
 
   // Verzekering (rubriek 8).
   drawText(
@@ -724,6 +795,44 @@ function fillPartyBlock(
     col.insurance.polis.x,
     col.insurance.polis.y,
     { font, size: 9 },
+  );
+  drawText(
+    page,
+    safe(party.verzekering.groeneKaartNr),
+    col.insurance.greenCard.x,
+    col.insurance.greenCard.y,
+    { font, size: 9 },
+  );
+  drawText(
+    page,
+    formatDateForDisplay(party.verzekering.geldigVan),
+    col.insurance.validFrom.x,
+    col.insurance.validFrom.y,
+    { font, size: 9 },
+  );
+  drawText(
+    page,
+    formatDateForDisplay(party.verzekering.geldigTot),
+    col.insurance.validTo.x,
+    col.insurance.validTo.y,
+    { font, size: 9 },
+  );
+  // Agentschap: combineer naam + contact in één regel met truncate.
+  const agentLine = truncate(
+    [
+      safe(party.verzekering.agentschap.naam),
+      safe(party.verzekering.agentschap.contact),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    34,
+  );
+  drawText(
+    page,
+    agentLine,
+    col.insurance.agent.x,
+    col.insurance.agent.y,
+    { font, size: 8, maxWidth: col.insurance.agent.maxWidth },
   );
 
   // Bestuurder (rubriek 9).
@@ -778,6 +887,20 @@ function fillPartyBlock(
     safe(d.rijbewijsNummer),
     col.driver.rijbewijs.x,
     col.driver.rijbewijs.y,
+    { font, size: 9 },
+  );
+  drawText(
+    page,
+    safe(d.rijbewijsCategorie),
+    col.driver.categorie.x,
+    col.driver.categorie.y,
+    { font, size: 9 },
+  );
+  drawText(
+    page,
+    formatDateForDisplay(d.rijbewijsGeldigTot),
+    col.driver.validTo.x,
+    col.driver.validTo.y,
     { font, size: 9 },
   );
 }
@@ -912,12 +1035,32 @@ async function renderCoverSheet(
 
   /* 5. Getuigen */
   writeHeading("5. Getuigen");
-  const witnesses = state.getuigen?.trim() || "Geen getuigen opgegeven.";
-  const witnessLines = wrapText(witnesses, 85, 4);
-  for (const line of witnessLines) {
+  if (state.hasGetuigen === false) {
     ensureSpace(12);
-    drawText(page, line, margin + 6, y, { font, size: 9 });
+    drawText(page, "Geen getuigen ter plaatse.", margin + 6, y, {
+      font,
+      size: 9,
+    });
     y -= 12;
+  } else if (state.getuigenList.length === 0) {
+    ensureSpace(12);
+    drawText(page, "Geen getuigen opgegeven.", margin + 6, y, {
+      font,
+      size: 9,
+    });
+    y -= 12;
+  } else {
+    for (const w of state.getuigenList) {
+      const name = [w.voornaam, w.naam].filter(Boolean).join(" ").trim();
+      const tel = w.telefoon?.trim();
+      const line = tel ? `${name || "—"} (${tel})` : name || "—";
+      const wrapped = wrapText(line, 85, 2);
+      for (const ln of wrapped) {
+        ensureSpace(12);
+        drawText(page, `• ${ln}`, margin + 6, y, { font, size: 9 });
+        y -= 12;
+      }
+    }
   }
   y -= 4;
 
@@ -942,10 +1085,39 @@ async function renderCoverSheet(
       "Voertuig",
       `${safe(p.voertuig.merkModel)} — ${safe(p.voertuig.nummerplaat)} (${safe(p.voertuig.landInschrijving)})`,
     );
+    if (p.voertuig.aanhanger) {
+      writeRow(
+        "Aanhangwagen",
+        `${safe(p.voertuig.aanhanger.nummerplaat) || "—"} (${safe(p.voertuig.aanhanger.landInschrijving) || "—"})`,
+      );
+    }
     writeRow(
       "Verzekering",
       `${safe(p.verzekering.maatschappij)} — polis ${safe(p.verzekering.polisnummer) || "—"}`,
     );
+    if (p.verzekering.groeneKaartNr) {
+      writeRow("Nr. groene kaart", p.verzekering.groeneKaartNr);
+    }
+    if (p.verzekering.geldigVan || p.verzekering.geldigTot) {
+      writeRow(
+        "Geldigheid verzekering",
+        `${formatDateForDisplay(p.verzekering.geldigVan) || "—"} → ${formatDateForDisplay(p.verzekering.geldigTot) || "—"}`,
+      );
+    }
+    if (p.verzekering.agentschap.naam || p.verzekering.agentschap.contact) {
+      writeRow(
+        "Agentschap / makelaar",
+        [p.verzekering.agentschap.naam, p.verzekering.agentschap.contact]
+          .filter(Boolean)
+          .join(" · "),
+      );
+    }
+    if (p.verzekering.schadeVerzekerd !== null) {
+      writeRow(
+        "Schade verzekerd in contract",
+        yn(p.verzekering.schadeVerzekerd),
+      );
+    }
     writeRow("Bestuurder", fullName(p.bestuurder));
     writeRow(
       "Geboortedatum bestuurder",
@@ -959,6 +1131,15 @@ async function renderCoverSheet(
       );
     }
     writeRow("Rijbewijs", safe(p.bestuurder.rijbewijsNummer));
+    if (p.bestuurder.rijbewijsCategorie) {
+      writeRow("Rijbewijs categorie", p.bestuurder.rijbewijsCategorie);
+    }
+    if (p.bestuurder.rijbewijsGeldigTot) {
+      writeRow(
+        "Rijbewijs geldig tot",
+        formatDateForDisplay(p.bestuurder.rijbewijsGeldigTot),
+      );
+    }
   };
 
   renderParty("Partij A", state.partyA);
@@ -966,16 +1147,98 @@ async function renderCoverSheet(
 
   /* 12. Toedracht */
   writeHeading("12. Toedracht");
-  const catLabel = getSituationCategoryLabel(state.situationCategory);
-  const detailLabel = getSituationDetailLabel(
-    state.situationCategory,
-    state.situationDetailKey,
-  );
-  writeRow("Categorie", catLabel || "Nog niet gekozen");
-  writeRow("Detail", detailLabel || "—");
-  if (state.situationCategory === "maneuver") {
-    writeRow("Manoeuvre A", getManeuverLabel("A", state.maneuverAKey) || "—");
-    writeRow("Manoeuvre B", getManeuverLabel("B", state.maneuverBKey) || "—");
+  if (state.situationCategories.length === 0) {
+    writeRow("Categorie", "Nog niet gekozen");
+  } else {
+    const catLabels = state.situationCategories
+      .map((c) => getSituationCategoryLabel(c))
+      .filter((s) => s.length > 0);
+    writeRow(
+      state.situationCategories.length === 1 ? "Categorie" : "Categorieën",
+      catLabels.join(" • "),
+    );
+    // Per categorie de bijhorende details opsommen, zodat de lezer ziet
+    // welk vakje uit welke categorie komt.
+    for (const cat of state.situationCategories) {
+      const labels = state.situationDetailKeys
+        .map((k) => getSituationDetailLabel(cat, k))
+        .filter((s) => s.length > 0);
+      if (cat === "maneuver") {
+        const aLabels = state.maneuverAKeys
+          .map((k) => getManeuverLabel("A", k))
+          .filter((s) => s.length > 0);
+        const bLabels = state.maneuverBKeys
+          .map((k) => getManeuverLabel("B", k))
+          .filter((s) => s.length > 0);
+        writeRow(
+          "Manoeuvre A",
+          aLabels.length > 0 ? aLabels.join(" • ") : "—",
+        );
+        writeRow(
+          "Manoeuvre B",
+          bLabels.length > 0 ? bLabels.join(" • ") : "—",
+        );
+      } else if (labels.length > 0) {
+        writeRow(getSituationCategoryLabel(cat), labels.join(" • "));
+      }
+    }
+  }
+
+  /* 11. Zichtbare schade */
+  if (
+    state.visibleDamagePartyA?.trim() ||
+    state.visibleDamagePartyB?.trim()
+  ) {
+    writeHeading("11. Zichtbare schade");
+    const renderDamage = (label: string, txt: string) => {
+      const lines = wrapText(txt.trim(), 90, 4);
+      ensureSpace(12 + lines.length * 12);
+      drawText(page, label, margin + 6, y, {
+        font: bold,
+        size: 9,
+        color: rgb(0.09, 0.17, 0.25),
+      });
+      y -= 12;
+      for (const ln of lines) {
+        ensureSpace(12);
+        drawText(page, ln, margin + 12, y, { font, size: 9 });
+        y -= 12;
+      }
+    };
+    if (state.visibleDamagePartyA?.trim()) {
+      renderDamage("Voertuig A", state.visibleDamagePartyA);
+    }
+    if (state.visibleDamagePartyB?.trim()) {
+      renderDamage("Voertuig B", state.visibleDamagePartyB);
+    }
+    y -= 4;
+  }
+
+  /* 13. Schets van het ongeval */
+  if (state.accidentSketch) {
+    const sketchH = 200;
+    ensureSpace(20 + sketchH + 8);
+    writeHeading("13. Schets van het ongeval");
+    const sketchY = y - sketchH;
+    page.drawRectangle({
+      x: margin,
+      y: sketchY,
+      width: contentWidth,
+      height: sketchH,
+      color: rgb(1, 1, 1),
+      borderColor: rgb(0.6, 0.67, 0.74),
+      borderWidth: 0.6,
+    });
+    await embedSignaturePng(
+      pdfDoc,
+      page,
+      state.accidentSketch,
+      margin + 4,
+      sketchY + 4,
+      contentWidth - 8,
+      sketchH - 8,
+    );
+    y = sketchY - 10;
   }
 
   /* 14. Opmerkingen */
@@ -1234,8 +1497,22 @@ export async function buildAccidentPdfBytes(
     drawCheckbox(templatePage1, o.x, o.y, 5.71);
   }
 
-  // Sectie 5 — getuigen (max. 3 regels).
-  const witnessText = safe(state.getuigen);
+  // Sectie 5 — getuigen (max. 3 regels op het officiële template).
+  // We bouwen "Voornaam Naam — telefoon" per getuige, regel 1 is iets korter
+  // omdat sectie 4 ervoor zit.
+  const witnessText = (() => {
+    if (state.hasGetuigen === false) return "Geen getuigen ter plaatse.";
+    if (state.getuigenList.length === 0) return "";
+    return state.getuigenList
+      .map((w) => {
+        const name = [w.voornaam, w.naam].filter(Boolean).join(" ").trim();
+        const tel = w.telefoon?.trim();
+        if (name && tel) return `${name} — ${tel}`;
+        return name || tel || "";
+      })
+      .filter(Boolean)
+      .join("; ");
+  })();
   const w1 = wrapText(witnessText, 95, 1);
   const remainder = witnessText.slice((w1[0] ?? "").length).trim();
   const w23 = wrapText(remainder, 140, 2);
@@ -1251,6 +1528,53 @@ export async function buildAccidentPdfBytes(
   // Secties 6-9 per partij.
   fillPartyBlock(templatePage1, font, bold, state.partyA, COL_A);
   fillPartyBlock(templatePage1, font, bold, state.partyB, COL_B);
+
+  // Sectie 10 — rode impact-pijl op de aangeduide raakpunten per partij.
+  // De wizard slaat het punt op als (x, y) genormaliseerd op zijn eigen
+  // silhouet-tekening, en de officiële sjabloon-vakjes tonen dezelfde tekening
+  // (alleen kleiner). Daardoor mogen we de coördinaten 1-op-1 doorgeven.
+  drawTemplateImpactArrow(
+    templatePage1,
+    TEMPLATE_PAGE_1.impactBoxA,
+    state.impactPartyA,
+  );
+  drawTemplateImpactArrow(
+    templatePage1,
+    TEMPLATE_PAGE_1.impactBoxB,
+    state.impactPartyB,
+  );
+
+  // Sectie 11 — zichtbare schade per partij (3 regels per kolom).
+  const renderVisibleDamage = (
+    text: string,
+    lines: ColLayout["visibleDamage"]["lines"],
+  ) => {
+    if (!text?.trim()) return;
+    const wrapped = wrapText(text.trim(), 32, lines.length);
+    for (let i = 0; i < wrapped.length; i++) {
+      const slot = lines[i];
+      drawText(templatePage1, wrapped[i], slot.x, slot.y, {
+        font,
+        size: 8,
+        maxWidth: slot.maxWidth,
+      });
+    }
+  };
+  renderVisibleDamage(state.visibleDamagePartyA, COL_A.visibleDamage.lines);
+  renderVisibleDamage(state.visibleDamagePartyB, COL_B.visibleDamage.lines);
+
+  // Sectie 13 — schets (PNG van de canvas, gecentreerd in het sjabloonvak).
+  if (state.accidentSketch) {
+    await embedSignaturePng(
+      pdfDoc,
+      templatePage1,
+      state.accidentSketch,
+      TEMPLATE_PAGE_1.sketchBox.x,
+      TEMPLATE_PAGE_1.sketchBox.y,
+      TEMPLATE_PAGE_1.sketchBox.w,
+      TEMPLATE_PAGE_1.sketchBox.h,
+    );
+  }
 
   // Sectie 12 — 17 vakjes toedracht.
   drawCheckboxes(templatePage1, bold, state);

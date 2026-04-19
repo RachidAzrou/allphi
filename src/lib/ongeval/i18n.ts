@@ -47,12 +47,13 @@ const STEP_TITLES: LangDict = {
     sit_parking: "Parkeerstand",
     sit_door: "Openen portier",
     sit_load: "Verlies van lading",
-    proposal_intro: "Voorstel van aangifte",
-    proposal_decision: "Voorstel van aangifte",
-    circumstances_manual: "Toedracht (aanvulling)",
+    circumstances_manual: "Aanvullende opmerkingen (optioneel)",
     vehicle_contact: "Raakpunt aan de voertuigen",
     impact_party_a: "Raakpunt voertuig A",
     impact_party_b: "Raakpunt voertuig B",
+    visible_damage_a: "Zichtbare schade voertuig A",
+    visible_damage_b: "Zichtbare schade voertuig B",
+    accident_sketch: "Situatieschets",
     overview_intro: "Overzicht ongevalsaangifte",
     overview_detail: "Overzicht",
     signature_a: "Handtekening A",
@@ -90,12 +91,13 @@ const STEP_TITLES: LangDict = {
     sit_parking: "En stationnement",
     sit_door: "Ouverture de portière",
     sit_load: "Perte de chargement",
-    proposal_intro: "Proposition de déclaration",
-    proposal_decision: "Proposition de déclaration",
-    circumstances_manual: "Circonstances (ajout)",
+    circumstances_manual: "Remarques supplémentaires (optionnel)",
     vehicle_contact: "Point de choc",
     impact_party_a: "Point de choc véhicule A",
     impact_party_b: "Point de choc véhicule B",
+    visible_damage_a: "Dégâts apparents véhicule A",
+    visible_damage_b: "Dégâts apparents véhicule B",
+    accident_sketch: "Croquis de l'accident",
     overview_intro: "Aperçu de la déclaration",
     overview_detail: "Aperçu",
     signature_a: "Signature A",
@@ -133,12 +135,13 @@ const STEP_TITLES: LangDict = {
     sit_parking: "Parked",
     sit_door: "Door opening",
     sit_load: "Loss of load",
-    proposal_intro: "Proposed report",
-    proposal_decision: "Proposed report",
-    circumstances_manual: "Circumstances (extra)",
+    circumstances_manual: "Additional remarks (optional)",
     vehicle_contact: "Vehicle contact",
     impact_party_a: "Impact point vehicle A",
     impact_party_b: "Impact point vehicle B",
+    visible_damage_a: "Visible damage vehicle A",
+    visible_damage_b: "Visible damage vehicle B",
+    accident_sketch: "Accident sketch",
     overview_intro: "Report overview",
     overview_detail: "Overview",
     signature_a: "Signature A",
@@ -337,8 +340,8 @@ const UI_STRINGS: LangDict = {
       "Na ondertekening wordt de aangifte automatisch overgemaakt aan je verzekeraar.",
     "banner.vehicle_contact":
       "Indien er contact geweest is tussen de voertuigen dan zal elke partij het raakpunt op zijn voertuig moeten aanduiden.",
-    "banner.proposal_intro":
-      "Hieronder vind je een voorstel voor de aangifte met vooraf aangevinkte omstandigheden in sectie 12 en opmerkingen in sectie 14.",
+    "banner.circumstances_manual":
+      "Optioneel — laat leeg als je niets wil toevoegen aan sectie 14 van het formulier.",
 
     // party_b_form
     "party_b_form.intro":
@@ -362,8 +365,39 @@ const UI_STRINGS: LangDict = {
     "field.registration_country": "Land van inschrijving",
     "field.birthdate": "Geboortedatum",
     "field.license_number": "Rijbewijsnummer",
+    "field.license_category": "Categorie",
+    "field.license_valid_to": "Geldig tot",
     "field.date": "Datum",
     "field.time": "Uur",
+
+    "insurance.extra_toggle": "Extra verzekeringsdetails",
+    "insurance.green_card": "Nr. groene kaart",
+    "insurance.valid_from": "Geldig vanaf",
+    "insurance.valid_to": "Geldig tot",
+    "insurance.agency": "Agentschap / makelaar",
+    "insurance.agency_contact": "Telefoon of e-mail agentschap",
+
+    "vehicle.trailer_toggle": "Aanhangwagen aangekoppeld?",
+    "vehicle.trailer_help":
+      "Vul enkel in als er een aanhanger aan het voertuig hing op het moment van het ongeval.",
+    "vehicle.trailer_plate": "Nummerplaat aanhanger",
+    "vehicle.trailer_country": "Land inschrijving",
+
+    "visible_damage.intro_a":
+      "Beschrijf kort de zichtbare schade aan voertuig A (sectie 11 van het formulier).",
+    "visible_damage.intro_b":
+      "Beschrijf kort de zichtbare schade aan voertuig B (sectie 11 van het formulier).",
+    "visible_damage.label_a": "Zichtbare schade voertuig A",
+    "visible_damage.label_b": "Zichtbare schade voertuig B",
+    "visible_damage.placeholder":
+      "Bv. deuk voorportier rechts, gebroken koplamp, …",
+    "visible_damage.optional_hint":
+      "Optioneel — laat leeg als er niets te melden is. Het raakpunt staat al op de tekening hiervoor.",
+
+    "sketch.intro":
+      "Maak hier een schets van het ongeval (positie van de voertuigen, rijrichting, verkeersborden, …). Komt op het sjabloon én bij de samenvatting.",
+    "sketch.optional_hint":
+      "Optioneel — sla over als je geen tekening wenst toe te voegen.",
 
     // location_time
     "location.picker.use_current": "Gebruik huidige locatie",
@@ -419,6 +453,16 @@ const UI_STRINGS: LangDict = {
       "Naam, adres en telefoonnummer van getuigen (indien van toepassing).",
     "witnesses.help":
       "Indien er geen getuigen zijn kun je dit veld leeg laten.",
+    "witnesses.question": "Waren er getuigen ter plaatse?",
+    "witnesses.entry_label": "Getuige",
+    "witnesses.add": "Nog een getuige toevoegen",
+    "witnesses.remove": "Getuige verwijderen",
+    "witnesses.field_phone": "Telefoonnummer (optioneel)",
+    "witnesses.none_note":
+      "Geen getuigen — je kan verdergaan naar de volgende stap.",
+
+    "situation.multi_hint":
+      "Meerdere antwoorden mogelijk — vink alles aan wat van toepassing is.",
 
     // situation_main
     "situation.help_choose": "Kies de situatie die best past.",
@@ -469,6 +513,7 @@ const UI_STRINGS: LangDict = {
     "overview.section.holder_a": "Verzekeringsnemer A",
     "overview.section.holder_b": "Verzekeringsnemer B",
     "overview.empty.witnesses": "Geen getuigen opgegeven.",
+    "overview.witnesses.none": "Geen getuigen ter plaatse.",
     "overview.empty.impact": "Geen raakpunt aangeduid.",
     "overview.empty.category": "Nog niet gekozen",
     "overview.empty.detail": "Geen detail",
@@ -506,25 +551,28 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "PDF laden mislukt",
     "complete.retry": "Opnieuw proberen",
     "complete.download": "Download PDF",
+    "complete.close": "Sluiten",
 
     "send.title": "Verzenden naar fleetmanager",
     "send.intro":
-      "Verstuur de aangifte als PDF-bijlage naar het centrale schade-adres van het bedrijf. Je krijgt zelf een kopie via CC.",
+      "Verstuur de aangifte als PDF-bijlage naar het centrale e-mailadres van het bedrijf. Je krijgt zelf een kopie via CC.",
     "send.button": "Verstuur naar fleetmanager",
     "send.button_retry": "Opnieuw versturen",
-    "send.sending": "Bezig met verzenden…",
-    "send.success_title": "Verstuurd",
+    "send.sending": "Aangifte wordt verzonden naar de fleetmanager…",
+    "send.success_title": "Verstuurd naar de fleetmanager",
     "send.success_to": "Verzonden naar:",
     "send.success_cc": "Kopie (CC):",
     "send.success_simulated":
       "Test-modus: e-mail werd niet daadwerkelijk verstuurd (RESEND_API_KEY ontbreekt).",
-    "send.failure_title": "Verzenden mislukt",
+    "send.failure_title": "Automatisch verzenden mislukt",
     "send.error.no_recipient":
-      "Er is nog geen centraal schade-adres ingesteld voor jouw bedrijf. Vraag de beheerder om dit toe te voegen in de bedrijfsinstellingen.",
+      "Er is nog geen centraal e-mailadres ingesteld voor jouw bedrijf. Vraag de beheerder om dit toe te voegen in de bedrijfsinstellingen.",
     "send.error.incomplete":
       "De aangifte mist nog een handtekening. Vul eerst alle stappen in.",
     "send.error.forbidden": "Enkel partij A kan de aangifte verzenden.",
     "send.error.generic": "Er ging iets mis. Probeer opnieuw.",
+    "send.retry_hint":
+      "Je kan dit later ook opnieuw proberen vanuit ‘Mijn incidenten’.",
     "send.b.waiting":
       "Partij A verstuurt de aangifte naar de fleetmanager. Je krijgt geen kopie via dit toestel.",
 
@@ -591,8 +639,8 @@ const UI_STRINGS: LangDict = {
       "Après signature, la déclaration est transmise automatiquement à votre assureur.",
     "banner.vehicle_contact":
       "En cas de contact entre les véhicules, chaque partie devra indiquer le point de choc sur son véhicule.",
-    "banner.proposal_intro":
-      "Vous trouverez ci-dessous une proposition de déclaration avec circonstances pré-cochées en rubrique 12 et remarques en rubrique 14.",
+    "banner.circumstances_manual":
+      "Optionnel — laissez vide si vous ne souhaitez rien ajouter à la rubrique 14 du formulaire.",
 
     "party_b_form.intro":
       "Remplissez uniquement les données que vous connaissez avec certitude. Vous pourrez compléter le reste depuis l'aperçu.",
@@ -615,8 +663,39 @@ const UI_STRINGS: LangDict = {
     "field.registration_country": "Pays d'immatriculation",
     "field.birthdate": "Date de naissance",
     "field.license_number": "N° de permis",
+    "field.license_category": "Catégorie",
+    "field.license_valid_to": "Valable jusqu'au",
     "field.date": "Date",
     "field.time": "Heure",
+
+    "insurance.extra_toggle": "Détails d'assurance supplémentaires",
+    "insurance.green_card": "N° de carte verte",
+    "insurance.valid_from": "Valable à partir du",
+    "insurance.valid_to": "Valable jusqu'au",
+    "insurance.agency": "Agence / courtier",
+    "insurance.agency_contact": "Téléphone ou e-mail de l'agence",
+
+    "vehicle.trailer_toggle": "Remorque attelée ?",
+    "vehicle.trailer_help":
+      "À ne remplir que si une remorque était attelée au véhicule au moment de l'accident.",
+    "vehicle.trailer_plate": "Plaque de la remorque",
+    "vehicle.trailer_country": "Pays d'immatriculation",
+
+    "visible_damage.intro_a":
+      "Décrivez brièvement les dégâts apparents au véhicule A (rubrique 11 du formulaire).",
+    "visible_damage.intro_b":
+      "Décrivez brièvement les dégâts apparents au véhicule B (rubrique 11 du formulaire).",
+    "visible_damage.label_a": "Dégâts apparents véhicule A",
+    "visible_damage.label_b": "Dégâts apparents véhicule B",
+    "visible_damage.placeholder":
+      "Ex. enfoncement portière avant droite, phare cassé, …",
+    "visible_damage.optional_hint":
+      "Optionnel — laissez vide si rien à signaler. Le point de choc figure déjà sur le schéma.",
+
+    "sketch.intro":
+      "Dessinez ici un croquis de l'accident (position des véhicules, sens de marche, panneaux, …). Reprise sur le formulaire et dans le récapitulatif.",
+    "sketch.optional_hint":
+      "Optionnel — passez l'étape si vous ne souhaitez pas ajouter de croquis.",
 
     "location.picker.use_current": "Utiliser ma position",
     "location.picker.locating": "Localisation…",
@@ -670,7 +749,16 @@ const UI_STRINGS: LangDict = {
       "Nom, adresse et téléphone des témoins (le cas échéant).",
     "witnesses.help":
       "En l'absence de témoin, vous pouvez laisser ce champ vide.",
+    "witnesses.question": "Y avait-il des témoins sur place ?",
+    "witnesses.entry_label": "Témoin",
+    "witnesses.add": "Ajouter un témoin",
+    "witnesses.remove": "Supprimer le témoin",
+    "witnesses.field_phone": "Téléphone (optionnel)",
+    "witnesses.none_note":
+      "Aucun témoin — vous pouvez passer à l'étape suivante.",
 
+    "situation.multi_hint":
+      "Plusieurs réponses possibles — cochez tout ce qui s'applique.",
     "situation.help_choose": "Choisissez la situation qui correspond le mieux.",
 
     "proposal.question": "Êtes-vous d'accord avec cette proposition ?",
@@ -715,6 +803,7 @@ const UI_STRINGS: LangDict = {
     "overview.section.holder_a": "Preneur d'assurance A",
     "overview.section.holder_b": "Preneur d'assurance B",
     "overview.empty.witnesses": "Aucun témoin renseigné.",
+    "overview.witnesses.none": "Aucun témoin sur place.",
     "overview.empty.impact": "Aucun point de choc indiqué.",
     "overview.empty.category": "Non choisi",
     "overview.empty.detail": "Aucun détail",
@@ -750,25 +839,28 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "Échec du chargement du PDF",
     "complete.retry": "Réessayer",
     "complete.download": "Télécharger le PDF",
+    "complete.close": "Fermer",
 
     "send.title": "Envoyer au fleet manager",
     "send.intro":
       "Envoyez la déclaration en PIèce jointe PDF à l'adresse centrale de gestion des sinistres. Vous recevrez vous-même une copie en CC.",
     "send.button": "Envoyer au fleet manager",
     "send.button_retry": "Renvoyer",
-    "send.sending": "Envoi en cours…",
-    "send.success_title": "Envoyé",
+    "send.sending": "La déclaration est en cours d'envoi au fleet manager…",
+    "send.success_title": "Envoyée au fleet manager",
     "send.success_to": "Envoyé à :",
     "send.success_cc": "Copie (CC) :",
     "send.success_simulated":
       "Mode test : l'e-mail n'a pas été réellement envoyé (RESEND_API_KEY manquant).",
-    "send.failure_title": "Échec de l'envoi",
+    "send.failure_title": "Échec de l'envoi automatique",
     "send.error.no_recipient":
       "Aucune adresse centrale de gestion des sinistres n'est configurée pour votre entreprise. Demandez à l'administrateur de l'ajouter dans les paramètres.",
     "send.error.incomplete":
       "La déclaration n'a pas encore été signée. Complétez d'abord toutes les étapes.",
     "send.error.forbidden": "Seule la partie A peut envoyer la déclaration.",
     "send.error.generic": "Une erreur s'est produite. Réessayez.",
+    "send.retry_hint":
+      "Vous pourrez aussi réessayer plus tard depuis « Mes incidents ».",
     "send.b.waiting":
       "La partie A envoie la déclaration au fleet manager. Vous ne recevrez pas de copie sur cet appareil.",
 
@@ -835,8 +927,8 @@ const UI_STRINGS: LangDict = {
       "Once signed, the report is automatically forwarded to your insurer.",
     "banner.vehicle_contact":
       "If the vehicles made contact, each party needs to mark the impact point on their vehicle.",
-    "banner.proposal_intro":
-      "Below is a proposed report with pre-selected circumstances in box 12 and notes in box 14.",
+    "banner.circumstances_manual":
+      "Optional — leave empty if you don't want to add anything to box 14 of the form.",
 
     "party_b_form.intro":
       "Only fill in what you know for sure. You can complete the rest from the overview.",
@@ -859,8 +951,39 @@ const UI_STRINGS: LangDict = {
     "field.registration_country": "Country of registration",
     "field.birthdate": "Date of birth",
     "field.license_number": "Driver's licence number",
+    "field.license_category": "Category",
+    "field.license_valid_to": "Valid until",
     "field.date": "Date",
     "field.time": "Time",
+
+    "insurance.extra_toggle": "Extra insurance details",
+    "insurance.green_card": "Green card no.",
+    "insurance.valid_from": "Valid from",
+    "insurance.valid_to": "Valid until",
+    "insurance.agency": "Agency / broker",
+    "insurance.agency_contact": "Agency phone or email",
+
+    "vehicle.trailer_toggle": "Trailer attached?",
+    "vehicle.trailer_help":
+      "Only fill in if a trailer was attached to the vehicle at the time of the accident.",
+    "vehicle.trailer_plate": "Trailer plate",
+    "vehicle.trailer_country": "Country of registration",
+
+    "visible_damage.intro_a":
+      "Briefly describe the visible damage to vehicle A (section 11 of the form).",
+    "visible_damage.intro_b":
+      "Briefly describe the visible damage to vehicle B (section 11 of the form).",
+    "visible_damage.label_a": "Visible damage vehicle A",
+    "visible_damage.label_b": "Visible damage vehicle B",
+    "visible_damage.placeholder":
+      "e.g. dent on right front door, broken headlight, …",
+    "visible_damage.optional_hint":
+      "Optional — leave empty if nothing to report. The impact point is already on the diagram above.",
+
+    "sketch.intro":
+      "Draw a sketch of the accident here (position of vehicles, direction of travel, road signs, …). Will appear on the form and in the summary.",
+    "sketch.optional_hint":
+      "Optional — skip if you don't want to add a sketch.",
 
     "location.picker.use_current": "Use my current location",
     "location.picker.locating": "Locating…",
@@ -913,7 +1036,16 @@ const UI_STRINGS: LangDict = {
     "witnesses.placeholder":
       "Name, address and phone number of witnesses (if any).",
     "witnesses.help": "If there are no witnesses, you can leave this field empty.",
+    "witnesses.question": "Were there any witnesses on the scene?",
+    "witnesses.entry_label": "Witness",
+    "witnesses.add": "Add another witness",
+    "witnesses.remove": "Remove witness",
+    "witnesses.field_phone": "Phone number (optional)",
+    "witnesses.none_note":
+      "No witnesses — you can continue to the next step.",
 
+    "situation.multi_hint":
+      "Multiple answers allowed — tick everything that applies.",
     "situation.help_choose": "Choose the situation that fits best.",
 
     "proposal.question": "Do you agree with this proposal?",
@@ -957,6 +1089,7 @@ const UI_STRINGS: LangDict = {
     "overview.section.holder_a": "Policyholder A",
     "overview.section.holder_b": "Policyholder B",
     "overview.empty.witnesses": "No witnesses provided.",
+    "overview.witnesses.none": "No witnesses on the scene.",
     "overview.empty.impact": "No impact point marked.",
     "overview.empty.category": "Not chosen yet",
     "overview.empty.detail": "No detail",
@@ -992,25 +1125,28 @@ const UI_STRINGS: LangDict = {
     "complete.error_title": "PDF failed to load",
     "complete.retry": "Try again",
     "complete.download": "Download PDF",
+    "complete.close": "Close",
 
     "send.title": "Send to fleet manager",
     "send.intro":
       "Send the report as PDF attachment to the company's central claims address. You'll get a copy via CC.",
     "send.button": "Send to fleet manager",
     "send.button_retry": "Send again",
-    "send.sending": "Sending…",
-    "send.success_title": "Sent",
+    "send.sending": "Report is being sent to the fleet manager…",
+    "send.success_title": "Sent to the fleet manager",
     "send.success_to": "Sent to:",
     "send.success_cc": "Copy (CC):",
     "send.success_simulated":
       "Test mode: e-mail wasn't actually sent (RESEND_API_KEY missing).",
-    "send.failure_title": "Sending failed",
+    "send.failure_title": "Automatic sending failed",
     "send.error.no_recipient":
       "No central claims address is configured for your company yet. Ask the admin to add one in the company settings.",
     "send.error.incomplete":
       "The report is not signed yet. Please complete all steps first.",
     "send.error.forbidden": "Only party A can send the report.",
     "send.error.generic": "Something went wrong. Try again.",
+    "send.retry_hint":
+      "You can also retry later from ‘My incidents’.",
     "send.b.waiting":
       "Party A is sending the report to the fleet manager. You won't get a copy on this device.",
 

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { TbPhotoShare } from "react-icons/tb";
 import { toast } from "sonner";
 import { PDFDocument, PageSizes } from "pdf-lib";
 import { Button } from "@/components/ui/button";
@@ -347,7 +348,7 @@ export function ScanCaptureStep({
             disabled={pages.length >= MAX_PAGES || alreadyUploaded}
             className="h-12 justify-center gap-2 rounded-xl border-[#2799D7]/30 text-[14px] font-semibold text-[#2799D7] hover:bg-[#E8F4FB] disabled:opacity-50"
           >
-            <Upload aria-hidden="true" className="size-4" />
+            <TbPhotoShare aria-hidden="true" className="size-4" />
             {t(lang, "scan.button_gallery")}
           </Button>
         </div>

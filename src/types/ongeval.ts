@@ -2,7 +2,7 @@
  * Wizard payload stored in `ongeval_aangiften.payload` (jsonb) and typed in the client.
  * Bump `version` when making breaking shape changes and migrate old rows if needed.
  */
-export const ONGEVAL_PAYLOAD_VERSION = 2 as const;
+export const ONGEVAL_PAYLOAD_VERSION = 3 as const;
 
 /** All known wizard screen ids (extend when adding branches). */
 export type OngevalStepId =
@@ -36,12 +36,13 @@ export type OngevalStepId =
   | "sit_parking"
   | "sit_door"
   | "sit_load"
-  | "proposal_intro"
-  | "proposal_decision"
   | "circumstances_manual"
   | "vehicle_contact"
   | "impact_party_a"
+  | "visible_damage_a"
   | "impact_party_b"
+  | "visible_damage_b"
+  | "accident_sketch"
   | "overview_intro"
   | "overview_detail"
   | "signature_a"
@@ -49,6 +50,16 @@ export type OngevalStepId =
   | "complete";
 
 export type SubmissionMode = "wizard" | "scan";
+
+/**
+ * Eén getuige bij sectie 5 van het Europees aanrijdingsformulier.
+ * Voornaam + naam zijn verplicht; telefoon is optioneel.
+ */
+export type Witness = {
+  voornaam: string;
+  naam: string;
+  telefoon: string;
+};
 
 /**
  * Metadata gathered in de scan-fallback flow. Geen wizard-velden, enkel het
@@ -97,17 +108,55 @@ export type Person = {
 
 export type Driver = Person & {
   rijbewijsNummer: string;
+  /** Rijbewijscategorie: A, B, BE, C, D, … (sectie 9 PDF). */
+  rijbewijsCategorie: string;
+  /** Geldigheidsdatum rijbewijs (ISO YYYY-MM-DD). */
+  rijbewijsGeldigTot: string;
+};
+
+/**
+ * Optionele agentschap-/makelaarsgegevens (sectie 8 PDF). Wordt enkel
+ * weergegeven wanneer er minstens één veld is ingevuld.
+ */
+export type InsuranceAgent = {
+  naam: string;
+  /** Telefoonnr of e-mail (vrije tekst — past op één regel op PDF). */
+  contact: string;
 };
 
 export type InsuranceInfo = {
   maatschappij: string;
   polisnummer: string;
+  /** Nr. van groene kaart (sectie 8 PDF). Optioneel. */
+  groeneKaartNr: string;
+  /** Geldig vanaf (ISO YYYY-MM-DD). Optioneel. */
+  geldigVan: string;
+  /** Geldig tot (ISO YYYY-MM-DD). Optioneel. */
+  geldigTot: string;
+  /** Agentschap / makelaar — optioneel. */
+  agentschap: InsuranceAgent;
+  /**
+   * Is de schade aan het voertuig verzekerd in het contract?
+   * `null` = niet beantwoord / niet getoond.
+   */
+  schadeVerzekerd: boolean | null;
+};
+
+/**
+ * Optionele aanhangwagen-info (sectie 7 PDF). `null` betekent dat er geen
+ * aanhangwagen aan het voertuig hing op het moment van het ongeval.
+ */
+export type TrailerInfo = {
+  nummerplaat: string;
+  landInschrijving: string;
 };
 
 export type VehicleInfo = {
   merkModel: string;
   nummerplaat: string;
   landInschrijving: string;
+  /** Aanhangwagen — `null` indien geen aanhanger. */
+  aanhanger: TrailerInfo | null;
 };
 
 export type PolicyholderType = "employee" | "company" | "other";
@@ -189,28 +238,61 @@ export type AccidentReportState = {
   gewonden: boolean | null;
   materieleSchadeAnders: boolean | null;
 
-  getuigen: string;
+  /**
+   * Waren er getuigen ter plaatse?
+   * - `null`: nog niet beantwoord.
+   * - `false`: geen getuigen — `getuigenList` is leeg.
+   * - `true`: minstens één getuige in `getuigenList`.
+   */
+  hasGetuigen: boolean | null;
+  getuigenList: Witness[];
 
   partyA: PartyDetails;
 
   partyB: PartyDetails;
 
-  situationCategory: SituationCategoryId | null;
-  /** Sub-selection key within the category (rear A/B, center option id, etc.). */
-  situationDetailKey: string | null;
+  /**
+   * Eén of meerdere gekozen ongevalsituaties.
+   * Volgt de volgorde van `SITUATION_CATEGORIES`. Door multi-select kunnen
+   * meerdere categorieën samen aangevinkt worden (bv. parking + lane_change).
+   */
+  situationCategories: SituationCategoryId[];
+  /**
+   * Plat gehouden lijst van detail-keys over alle categorieën heen. Iedere
+   * detail-id (bv. `a_rear`, `door_b`, `park_moving`) is uniek over de hele
+   * app, dus we hoeven hem niet per categorie te groeperen voor opslag.
+   */
+  situationDetailKeys: string[];
 
-  maneuverAKey: string | null;
-  maneuverBKey: string | null;
+  /** Manoeuvre-keys voor partij A — meerdere keuzes mogelijk. */
+  maneuverAKeys: string[];
+  /** Manoeuvre-keys voor partij B — meerdere keuzes mogelijk. */
+  maneuverBKeys: string[];
 
-  proposalAccepted: boolean | null;
-
-  /** Section 12–style free circumstances when user rejects the proposal. */
+  /**
+   * Optionele vrije tekst voor sectie 14 (opmerkingen) van het Europees
+   * aanrijdingsformulier. Mag leeg blijven.
+   */
   circumstancesNotes: string;
 
   vehicleContact: boolean | null;
 
   impactPartyA: ImpactPoint | null;
   impactPartyB: ImpactPoint | null;
+
+  /**
+   * Vrije omschrijving van de zichtbare schade per voertuig (sectie 11 PDF).
+   * Maximum 3 regels op het sjabloon — handmatig wrappen tijdens render.
+   */
+  visibleDamagePartyA: string;
+  visibleDamagePartyB: string;
+
+  /**
+   * Optionele situatieschets als PNG dataURL (sectie 13 PDF). Wordt
+   * gerenderd in het schetsvak van het sjabloon én op de coversheet.
+   * `null` = overgeslagen.
+   */
+  accidentSketch: string | null;
 
   overviewSkipped: boolean;
 
@@ -245,14 +327,31 @@ export function createInitialAccidentState(): AccidentReportState {
   const emptyDriver = (): Driver => ({
     ...emptyPerson(),
     rijbewijsNummer: "",
+    rijbewijsCategorie: "",
+    rijbewijsGeldigTot: "",
+  });
+
+  const emptyInsurance = (): InsuranceInfo => ({
+    maatschappij: "",
+    polisnummer: "",
+    groeneKaartNr: "",
+    geldigVan: "",
+    geldigTot: "",
+    agentschap: { naam: "", contact: "" },
+    schadeVerzekerd: null,
   });
 
   const emptyParty = (): PartyDetails => ({
     verzekeringsnemerType: "company",
     verzekeringsnemer: emptyPerson(),
     bestuurder: emptyDriver(),
-    verzekering: { maatschappij: "", polisnummer: "" },
-    voertuig: { merkModel: "", nummerplaat: "", landInschrijving: "België" },
+    verzekering: emptyInsurance(),
+    voertuig: {
+      merkModel: "",
+      nummerplaat: "",
+      landInschrijving: "België",
+      aanhanger: null,
+    },
   });
 
   return {
@@ -297,18 +396,21 @@ export function createInitialAccidentState(): AccidentReportState {
     },
     gewonden: null,
     materieleSchadeAnders: null,
-    getuigen: "",
+    hasGetuigen: null,
+    getuigenList: [],
     partyA: emptyParty(),
     partyB: emptyParty(),
-    situationCategory: null,
-    situationDetailKey: null,
-    maneuverAKey: null,
-    maneuverBKey: null,
-    proposalAccepted: null,
+    situationCategories: [],
+    situationDetailKeys: [],
+    maneuverAKeys: [],
+    maneuverBKeys: [],
     circumstancesNotes: "",
     vehicleContact: null,
     impactPartyA: null,
     impactPartyB: null,
+    visibleDamagePartyA: "",
+    visibleDamagePartyB: "",
+    accidentSketch: null,
     overviewSkipped: false,
     signaturePartyA: null,
     signaturePartyB: null,
