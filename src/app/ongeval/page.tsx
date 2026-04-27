@@ -9,7 +9,6 @@ import {
   FilePenLine,
   FileText,
   PlusCircle,
-  RefreshCw,
   Send,
   Trash2,
 } from "lucide-react";
@@ -18,9 +17,11 @@ import { createClient } from "@/lib/supabase/client";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/loading-state";
+import { AllphiLoader } from "@/components/allphi-loader";
 import { createInitialAccidentState } from "@/types/ongeval";
 import { mergePayloadIntoState } from "@/lib/ongeval/engine";
 import { formatDateForDisplay } from "@/lib/ongeval/date-utils";
+import { cn } from "@/lib/utils";
 import { FaRegEye } from "react-icons/fa";
 import { FaCarCrash } from "react-icons/fa";
 import {
@@ -100,7 +101,7 @@ function formatDateTime(iso: string | null): string {
 
 function draftBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF6E5] px-2.5 py-1 text-[12px] font-semibold text-[#7A5A00]">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[12px] font-semibold text-muted-foreground">
       <FilePenLine className="size-3.5" strokeWidth={2.5} />
       Concept (nog niet afgerond)
     </span>
@@ -108,6 +109,26 @@ function draftBadge() {
 }
 
 function emailStatusBadge(row: SubmittedRow) {
+  // De "verzenden" actie stuurt nu naar de fleetmanager-inbox in-app (status=submitted),
+  // niet langer naar e-mail. We tonen hier dus primair de status van de aangifte.
+  if (row.status === "submitted") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F7EE] px-2.5 py-1 text-[12px] font-semibold text-[#1F8A4C]">
+        <CheckCircle2 className="size-3.5" strokeWidth={2.5} />
+        Verzonden naar fleetmanager
+      </span>
+    );
+  }
+  if (row.status === "completed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[12px] font-semibold text-muted-foreground">
+        <Clock className="size-3.5" strokeWidth={2.5} />
+        Afgewerkt
+      </span>
+    );
+  }
+
+  // Fallback voor legacy/edge-cases: toon nog steeds email-status indien aanwezig.
   switch (row.email_status) {
     case "sent":
       return (
@@ -127,17 +148,15 @@ function emailStatusBadge(row: SubmittedRow) {
     case "queued":
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF6E5] px-2.5 py-1 text-[12px] font-semibold text-[#7A5A00]">
-          <RefreshCw className="size-3.5 animate-spin" strokeWidth={2.5} />
+          <AllphiLoader size={14} className="-my-0.5" />
           Bezig met verzenden
         </span>
       );
     default:
-      // Aangifte is afgemaakt (status='submitted' of legacy 'completed') maar
-      // er is nog geen e-mailpoging geregistreerd. Geef een duidelijke hint.
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F1F4F8] px-2.5 py-1 text-[12px] font-semibold text-[#5F7382]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[12px] font-semibold text-muted-foreground">
           <Clock className="size-3.5" strokeWidth={2.5} />
-          Nog niet verzonden
+          Status: {row.status}
         </span>
       );
   }
@@ -339,209 +358,279 @@ export default function OngevalIndexPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+      <div className="app-canvas flex min-h-[100dvh] flex-col">
         <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
         <LoadingState context="ongeval" />
       </div>
     );
   }
 
+  const hasDrafts = drafts.length > 0;
+  const hasSubmitted = submitted.length > 0;
+  const bothLists = hasDrafts && hasSubmitted;
+  const iosRowClass =
+    "touch-manipulation border-b border-border/60 px-4 py-3.5 last:border-b-0 active:bg-muted/40 sm:px-4";
+
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+    <div className="app-canvas flex min-h-[100dvh] flex-col">
       <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
-      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-6 lg:px-8">
-        <div>
-          <div className="flex items-center gap-2">
-            <span
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]"
-              aria-hidden
-            >
-              <FaCarCrash className="size-5" aria-hidden />
-            </span>
-            <h2 className="font-heading text-xl font-semibold text-[#163247]">
-              Ongeval of aanrijding
-            </h2>
-          </div>
-          <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-[#5F7382]">
-            Start een nieuw Europees aanrijdingsformulier-stappenplan of ga
-            verder met een concept.
-          </p>
-
-          <div className="mt-4 flex w-full max-w-md flex-col gap-3">
-            <Button
-              type="button"
-              className="h-14 w-full justify-center gap-2 rounded-xl bg-[#2799D7] text-[16px] font-semibold text-white hover:bg-[#1e7bb0]"
-              onClick={() => void createNew()}
-            >
-              <PlusCircle className="size-5" strokeWidth={1.75} />
-              Nieuwe aangifte
-            </Button>
-          </div>
-        </div>
-
-        {drafts.length > 0 ? (
-          <div className="mt-8 space-y-3">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-[#5F7382]">
-              Concepten ({drafts.length})
-            </p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {drafts.map((row) => {
-                const meta = describeReport(row);
-                return (
-                  <div
-                    key={row.id}
-                    className="rounded-2xl border border-[#FCD49B]/70 bg-white px-4 py-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FFF6E5] text-[#7A5A00]">
-                        <FilePenLine className="size-4" strokeWidth={2} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[15px] font-semibold text-[#163247]">
-                          {meta.title}
-                        </p>
-                        <p className="mt-0.5 truncate text-[12.5px] leading-snug text-[#5F7382]">
-                          {meta.subtitle}
-                        </p>
-                        <div className="mt-2">{draftBadge()}</div>
-                        <p className="mt-2 text-[11.5px] leading-snug text-[#5F7382]">
-                          Laatst bewerkt: {formatDateTime(row.updated_at)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        className="h-9 gap-1.5 rounded-lg bg-[#2799D7] px-3 text-[13px] font-semibold text-white hover:bg-[#1e7bb0]"
-                        onClick={() => router.push(`/ongeval/${row.id}`)}
-                      >
-                        <FaRegEye className="size-3.5" aria-hidden />
-                        Doorgaan met invullen
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 gap-1.5 rounded-lg border-[#B42318]/30 bg-white px-3 text-[13px] text-[#B42318] hover:bg-[#FDECEE]"
-                        onClick={() => setDeleteId(row.id)}
-                      >
-                        <Trash2 className="size-3.5" strokeWidth={2} />
-                        Verwijder
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {submitted.length > 0 ? (
-          <div className="mt-8 space-y-3">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-[#5F7382]">
-              Afgeronde aangiftes ({submitted.length})
-            </p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {submitted.map((row) => {
-                const meta = describeReport(row);
-                const isResending = resending === row.id;
-                return (
-                  <div
-                    key={row.id}
-                    className="rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]">
-                        <FileText className="size-4" strokeWidth={2} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[15px] font-semibold text-[#163247]">
-                          {meta.title}
-                        </p>
-                        <p className="mt-0.5 truncate text-[12.5px] leading-snug text-[#5F7382]">
-                          {meta.subtitle}
-                        </p>
-                        <div className="mt-2">{emailStatusBadge(row)}</div>
-
-                        {row.email_status === "sent" && row.email_sent_at ? (
-                          <p className="mt-2 text-[11.5px] leading-snug text-[#5F7382]">
-                            Verzonden op {formatDateTime(row.email_sent_at)}
-                            {row.email_recipient ? (
-                              <>
-                                <br />
-                                Naar {row.email_recipient}
-                              </>
-                            ) : null}
-                          </p>
-                        ) : null}
-
-                        {row.email_status === "failed" && row.email_error ? (
-                          <p className="mt-2 line-clamp-2 text-[11.5px] leading-snug text-[#B42318]">
-                            {row.email_error}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 gap-1.5 rounded-lg border-[#2799D7]/35 bg-white px-3 text-[13px] text-[#163247] hover:bg-[#E8F4FB]"
-                        onClick={() => router.push(`/ongeval/${row.id}`)}
-                      >
-                        <FaRegEye className="size-3.5 text-[#2799D7]" aria-hidden />
-                        Open
-                      </Button>
-                      <Button
-                        type="button"
-                        className="h-9 gap-1.5 rounded-lg bg-[#2799D7] px-3 text-[13px] font-semibold text-white hover:bg-[#1e7bb0] disabled:opacity-60"
-                        onClick={() => void resend(row.id)}
-                        disabled={
-                          isResending ||
-                          row.email_status === "sending" ||
-                          row.email_status === "queued"
-                        }
-                      >
-                        {isResending ||
-                        row.email_status === "sending" ||
-                        row.email_status === "queued" ? (
-                          <RefreshCw
-                            className="size-3.5 animate-spin"
-                            aria-hidden
-                          />
-                        ) : (
-                          <Send className="size-3.5" aria-hidden />
-                        )}
-                        {row.email_status === "sent"
-                          ? "Opnieuw verzenden"
-                          : row.email_status === "failed"
-                            ? "Opnieuw proberen"
-                            : "Verstuur naar fleetmanager"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {drafts.length === 0 && submitted.length === 0 ? (
-          <div className="mt-10 rounded-2xl border border-dashed border-[#2799D7]/30 bg-white px-6 py-10 text-center">
+      <main className="app-page-shell">
+        {/* Geen card-hero: alleen titel + primaire actie */}
+        <header className="touch-manipulation pt-1">
+          <div className="flex items-start gap-3">
             <FaCarCrash
-              className="mx-auto mb-3 size-8 text-[#2799D7]/60"
+              className="mt-0.5 size-7 shrink-0 text-primary sm:size-8"
               aria-hidden
             />
-            <p className="text-[15px] font-semibold text-[#163247]">
-              Nog geen aangiftes
-            </p>
-            <p className="mt-1 text-[13px] text-[#5F7382]">
-              Klik op &laquo;Nieuwe aangifte&raquo; om er een aan te maken.
-            </p>
+            <div className="min-w-0 flex-1">
+              <h1
+                id="ongeval-index-title"
+                className="font-heading text-[1.375rem] font-bold leading-[1.15] tracking-tight text-foreground sm:text-[1.625rem]"
+              >
+                Ongeval of aanrijding
+              </h1>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="lg"
+            className="mt-5 min-h-12 w-full justify-center gap-2 rounded-xl text-[16px] font-semibold touch-manipulation sm:mt-6 sm:min-h-11 sm:text-[15px]"
+            onClick={() => void createNew()}
+          >
+            <PlusCircle className="size-5 shrink-0" strokeWidth={1.75} />
+            Nieuwe aangifte
+          </Button>
+        </header>
+
+        {hasDrafts || hasSubmitted ? (
+          <div
+            className={cn(
+              "mt-8 space-y-8 sm:mt-10",
+              bothLists && "xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-8 xl:space-y-0",
+            )}
+          >
+            {hasDrafts ? (
+              <section aria-labelledby="ongeval-drafts-heading" className="min-w-0">
+                <h2
+                  id="ongeval-drafts-heading"
+                  className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Concepten
+                  <span className="ml-1.5 tabular-nums text-muted-foreground/80">
+                    ({drafts.length})
+                  </span>
+                </h2>
+                <div className="app-ios-group">
+                  {drafts.map((row) => {
+                    const meta = describeReport(row);
+                    return (
+                      <article key={row.id} className={iosRowClass}>
+                        <div className="flex gap-3">
+                          <FilePenLine
+                            className="mt-0.5 size-[18px] shrink-0 text-muted-foreground"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="space-y-1">
+                              <p className="text-[16px] font-semibold leading-snug text-foreground">
+                                {meta.title}
+                              </p>
+                              <p className="text-[13px] leading-snug text-muted-foreground">
+                                {meta.subtitle}
+                              </p>
+                            </div>
+                            <div className="mt-2.5">{draftBadge()}</div>
+                            <p className="mt-2 text-[12px] text-muted-foreground">
+                              Bewerkt {formatDateTime(row.updated_at)}
+                            </p>
+                            <div
+                              className="mt-4 flex flex-row gap-3 border-t border-border/50 pt-3"
+                              role="group"
+                              aria-label="Acties voor dit concept"
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                aria-label="Doorgaan"
+                                className="min-h-11 flex-1 touch-manipulation justify-center gap-0 sm:gap-2"
+                                onClick={() => router.push(`/ongeval/${row.id}`)}
+                              >
+                                <FaRegEye
+                                  className="size-5 shrink-0 sm:size-4"
+                                  aria-hidden
+                                />
+                                <span className="hidden sm:inline">Doorgaan</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                aria-label="Verwijderen"
+                                className="min-h-11 flex-1 touch-manipulation justify-center gap-0 sm:gap-2"
+                                onClick={() => setDeleteId(row.id)}
+                              >
+                                <Trash2
+                                  className="size-5 shrink-0 sm:size-4"
+                                  strokeWidth={2}
+                                  aria-hidden
+                                />
+                                <span className="hidden sm:inline">Verwijderen</span>
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {hasSubmitted ? (
+              <section
+                aria-labelledby="ongeval-submitted-heading"
+                className="min-w-0"
+              >
+                <h2
+                  id="ongeval-submitted-heading"
+                  className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Afgeronde aangiftes
+                  <span className="ml-1.5 tabular-nums text-muted-foreground/80">
+                    ({submitted.length})
+                  </span>
+                </h2>
+                <div className="app-ios-group">
+                  {submitted.map((row) => {
+                    const meta = describeReport(row);
+                    const isResending = resending === row.id;
+                    return (
+                      <article key={row.id} className={iosRowClass}>
+                        <div className="flex gap-3">
+                          <FileText
+                            className="mt-0.5 size-[18px] shrink-0 text-primary"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="space-y-1">
+                              <p className="text-[16px] font-semibold leading-snug text-foreground">
+                                {meta.title}
+                              </p>
+                              <p className="text-[13px] leading-snug text-muted-foreground">
+                                {meta.subtitle}
+                              </p>
+                            </div>
+
+                            <div className="mt-2.5">{emailStatusBadge(row)}</div>
+
+                            {row.email_status === "sent" && row.email_sent_at ? (
+                              <div className="mt-2 rounded-lg bg-muted/50 px-3 py-2 text-[12px] leading-snug text-muted-foreground">
+                                <p className="font-medium text-foreground/80">E-mail</p>
+                                <p className="mt-0.5">
+                                  Verzonden {formatDateTime(row.email_sent_at)}
+                                </p>
+                                {row.email_recipient ? (
+                                  <p className="mt-1 truncate text-[12px]">{row.email_recipient}</p>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            {row.email_status === "failed" && row.email_error ? (
+                              <div className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-destructive">
+                                  Verzenden mislukt
+                                </p>
+                                <p className="mt-1 line-clamp-3 text-[12px] leading-snug text-destructive">
+                                  {row.email_error}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            <div
+                              className="mt-4 flex flex-row gap-3 border-t border-border/50 pt-3"
+                              role="group"
+                              aria-label="Acties voor deze aangifte"
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                aria-label="Open dossier"
+                                className="min-h-11 flex-1 touch-manipulation justify-center gap-0 sm:gap-2"
+                                onClick={() => router.push(`/ongeval/${row.id}`)}
+                              >
+                                <FaRegEye className="size-5 shrink-0 sm:size-4" aria-hidden />
+                                <span className="hidden sm:inline">Open dossier</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                aria-label="Verstuur naar fleetmanager"
+                                className="min-h-11 flex-1 touch-manipulation justify-center bg-emerald-600 px-0 py-0 text-center text-[14px] font-semibold leading-snug text-white hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 sm:gap-2"
+                                onClick={() => void resend(row.id)}
+                                disabled={
+                                  isResending ||
+                                  row.email_status === "sending" ||
+                                  row.email_status === "queued"
+                                }
+                              >
+                                {isResending ||
+                                row.email_status === "sending" ||
+                                row.email_status === "queued" ? (
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <AllphiLoader size={18} className="shrink-0 sm:[&>img]:!h-4 sm:[&>img]:!w-4" />
+                                    <span className="hidden sm:inline">Bezig…</span>
+                                  </span>
+                                ) : row.email_status === "sent" ? (
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <Send className="size-5 shrink-0 sm:size-4" aria-hidden />
+                                    <span className="hidden sm:inline">Opnieuw verzenden</span>
+                                  </span>
+                                ) : row.email_status === "failed" ? (
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <Send className="size-5 shrink-0 sm:size-4" aria-hidden />
+                                    <span className="hidden sm:inline">Opnieuw proberen</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center gap-2">
+                                    <Send className="size-5 shrink-0 sm:size-4" aria-hidden />
+                                    <span className="hidden sm:inline">Verstuur naar fleetmanager</span>
+                                  </span>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : null}
-      </div>
+
+        {!hasDrafts && !hasSubmitted ? (
+          <section
+            aria-labelledby="ongeval-empty-title"
+            className="mt-10 text-center sm:mt-12"
+          >
+            <FaCarCrash
+              className="mx-auto mb-2 size-8 text-muted-foreground/50"
+              aria-hidden
+            />
+            <p
+              id="ongeval-empty-title"
+              className="font-heading text-[17px] font-semibold text-foreground"
+            >
+              Nog geen aangiftes
+            </p>
+            <p className="mx-auto mt-2 max-w-xs text-[14px] leading-relaxed text-muted-foreground">
+              Tik op <span className="font-medium text-foreground">Nieuwe aangifte</span> om te
+              beginnen.
+            </p>
+          </section>
+        ) : null}
+      </main>
 
       <Dialog open={deleteId !== null} onOpenChange={(o) => (!o ? setDeleteId(null) : null)}>
         <DialogContent showCloseButton>
@@ -550,11 +639,19 @@ export default function OngevalIndexPage() {
             Dit concept wordt definitief verwijderd. Dit kan niet ongedaan gemaakt worden.
           </DialogDescription>
           <DialogFooter className="gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleting}>
+            <Button
+              variant="outline"
+              size="lg"
+              className="min-h-12 w-full touch-manipulation sm:min-h-9 sm:w-auto"
+              onClick={() => setDeleteId(null)}
+              disabled={deleting}
+            >
               Annuleren
             </Button>
             <Button
               variant="destructive"
+              size="lg"
+              className="min-h-12 w-full touch-manipulation sm:min-h-9 sm:w-auto"
               onClick={() => void confirmDelete()}
               disabled={deleting}
             >

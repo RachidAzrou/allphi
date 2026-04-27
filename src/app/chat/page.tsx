@@ -23,6 +23,8 @@ export default function ChatPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userDisplayName, setUserDisplayName] = useState("");
   const [voornaam, setVoornaam] = useState("");
+  const [showFleetManagerNav, setShowFleetManagerNav] = useState(false);
+  const [hasActiveFleetEscalation, setHasActiveFleetEscalation] = useState(false);
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [draftsDialogOpen, setDraftsDialogOpen] = useState(false);
 
@@ -133,6 +135,15 @@ export default function ChatPage() {
     );
   }, []);
 
+  const loadEscalationStatus = useCallback(async () => {
+    const res = await fetch("/api/chat/escalation-status", {
+      credentials: "same-origin",
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { active?: boolean };
+    setHasActiveFleetEscalation(Boolean(data.active));
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       const {
@@ -148,7 +159,7 @@ export default function ChatPage() {
 
       const { data: medewerker } = await supabase
         .from("medewerkers")
-        .select("voornaam, naam")
+        .select("voornaam, naam, role, rol")
         .eq("emailadres", user.email)
         .maybeSingle();
 
@@ -163,10 +174,21 @@ export default function ChatPage() {
         if (volledigeNaam) {
           setUserDisplayName(volledigeNaam);
         }
+
+        const role = (medewerker as { role?: string | null; rol?: string | null }).role ??
+          (medewerker as { role?: string | null; rol?: string | null }).rol ??
+          "medewerker";
+        const isFleet = role === "fleet_manager" || role === "management";
+        setShowFleetManagerNav(isFleet);
+        if (isFleet) {
+          router.replace("/inbox");
+          return;
+        }
       }
 
       try {
         await loadMessages();
+        await loadEscalationStatus();
       } catch (e) {
         console.error(e);
         toast.error("Kon je chatgeschiedenis niet laden.");
@@ -176,7 +198,7 @@ export default function ChatPage() {
     };
 
     checkAuth();
-  }, [router, supabase, loadMessages]);
+  }, [router, supabase, loadMessages, loadEscalationStatus]);
 
   const sendMessage = useCallback(
     async (content: string, files: File[] = []) => {
@@ -243,10 +265,12 @@ export default function ChatPage() {
               "Er ging iets mis. Probeer het opnieuw.",
           );
           await loadMessages();
+          await loadEscalationStatus();
           return;
         }
 
         await loadMessages();
+        await loadEscalationStatus();
         revokeBlobs();
 
         if (result.persisted?.attachments?.length) {
@@ -267,6 +291,7 @@ export default function ChatPage() {
         );
         try {
           await loadMessages();
+          await loadEscalationStatus();
         } catch {
           /* ignore */
         }
@@ -274,23 +299,37 @@ export default function ChatPage() {
         setIsLoading(false);
       }
     },
-    [loadMessages],
+    [loadMessages, loadEscalationStatus],
   );
 
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex h-dvh min-h-0 max-h-dvh flex-col overflow-hidden bg-chat-canvas">
+    <div className="chat-app-shell flex h-dvh min-h-0 max-h-dvh flex-col overflow-hidden">
       {isBootLoading ? (
         <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center">
           <LoadingState />
         </div>
       ) : (
         <>
-          <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
+          <AppHeader
+            userEmail={userEmail}
+            userDisplayName={userDisplayName}
+            showFleetManagerNav={showFleetManagerNav}
+          />
 
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+              {hasActiveFleetEscalation ? (
+                <div className="px-safe pt-3">
+                  <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-foreground">
+                    <p className="font-semibold">Je bent in gesprek met je fleet manager.</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      Antwoorden van de fleet manager verschijnen hieronder in het rood. De chatbot blijft beschikbaar, maar je ziet duidelijke sessiescheidingen.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               {!hasMessages && (
                 <WelcomeCard voornaam={voornaam} onAction={sendMessage} />
               )}
@@ -302,7 +341,10 @@ export default function ChatPage() {
               />
             </div>
 
-            <ChatComposer onSend={sendMessage} disabled={isLoading} />
+            <ChatComposer
+              onSend={sendMessage}
+              disabled={isLoading}
+            />
           </main>
           <DraftChoiceDialog
             open={draftsDialogOpen}

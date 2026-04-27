@@ -5,7 +5,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { mergePayloadIntoState } from "@/lib/ongeval/engine";
 import { formatDateForDisplay } from "@/lib/ongeval/date-utils";
 import { buildAccidentPdfBytes } from "@/app/api/ongeval/[id]/pdf/route";
-import type { AccidentReportState } from "@/types/ongeval";
+import type { AccidentReportState, DamagePhoto } from "@/types/ongeval";
 
 export type SendReportError =
   | "auth_required"
@@ -39,6 +39,7 @@ type ReportRow = {
   party_b_user_id: string | null;
   status: "draft" | "submitted";
   payload: unknown;
+  medewerker_id?: number | null;
   email_status: "queued" | "sending" | "sent" | "failed" | null;
   email_attempts: number | null;
   submission_mode: "wizard" | "scan" | null;
@@ -130,6 +131,7 @@ function buildBody(
   reportId: string,
   driverName: string,
   appOrigin: string | null,
+  photoLines?: string[] | null,
 ): { html: string; text: string } {
   const datum = formatDateForDisplay(state.location.datum) || "—";
   const tijd = state.location.tijd?.trim() || "—";
@@ -164,6 +166,9 @@ function buildBody(
     `- Voertuig medewerker (A): ${plaatA} — ${verzA} (polis ${polA})`,
     `- Voertuig partij B: ${plaatB} — ${verzB} (polis ${polB})`,
     `- Gewonden: ${gewonden}`,
+    ...(photoLines && photoLines.length > 0
+      ? ["", "Foto’s (damage track):", ...photoLines]
+      : []),
     ``,
     dossierLink ? `Dossier in AllPhi: ${dossierLink}` : null,
     ``,
@@ -184,6 +189,29 @@ ${lines
 </body></html>`;
 
   return { html, text };
+}
+
+async function buildDamagePhotoLines(
+  adminClient: ReturnType<typeof createServerSupabase>,
+  photos: DamagePhoto[],
+): Promise<string[]> {
+  const lines: string[] = [];
+  for (const p of photos) {
+    const label = p.name?.trim() || "foto";
+    try {
+      const { data, error } = await adminClient.storage
+        .from(p.bucket)
+        .createSignedUrl(p.path, 60 * 60 * 24 * 7);
+      if (error || !data?.signedUrl) {
+        lines.push(`- ${label}: (link niet beschikbaar)`);
+      } else {
+        lines.push(`- ${label}: ${data.signedUrl}`);
+      }
+    } catch {
+      lines.push(`- ${label}: (link niet beschikbaar)`);
+    }
+  }
+  return lines;
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -233,7 +261,10 @@ export async function sendAccidentReport(
     row.submission_mode ?? state.submissionMode ?? "wizard";
 
   // Minimale completeness-check zodat we geen lege PDF mailen.
-  if (submissionMode === "wizard" && !state.signaturePartyA) {
+  const incidentKind = state.incidentKind ?? "accident_with_other_party";
+  // Alleen bij een volledig Europees aanrijdingsformulier (tegenpartij) eisen we handtekening A.
+  // In de "damage_only" track (glasbreuk/diefstal/eenzijdig) bestaat geen handtekeningstap.
+  if (submissionMode === "wizard" && incidentKind === "accident_with_other_party" && !state.signaturePartyA) {
     return { ok: false, error: "incomplete", detail: "signature_a" };
   }
   if (submissionMode === "scan") {
@@ -257,6 +288,83 @@ export async function sendAccidentReport(
   // company_profile. Service-role client zodat we ook leeswerk doen wanneer
   // RLS roeit.
   const adminClient = createServiceRoleClient() ?? supabase;
+
+  // Enrich DB row + payload with medewerker/vehicle context (best-effort).
+  // This ensures fleet manager can always resolve medewerker + wagen, even when
+  // the user didn't fill those fields in the wizard payload.
+  try {
+    const email = (user.email ?? "").trim();
+    if (email) {
+      const { data: m } = await adminClient
+        .from("medewerkers")
+        .select("*")
+        .ilike("emailadres", email)
+        .maybeSingle();
+      const medewerkerId = (m as { id?: number } | null)?.id ?? null;
+
+      const { data: vctx } = await adminClient
+        .from("v_fleet_assistant_context")
+        .select("nummerplaat, merk_model, insurance_company, policy_number")
+        .ilike("emailadres", email)
+        .order("merk_model", { ascending: true })
+        .order("nummerplaat", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const plate = (vctx as { nummerplaat?: string | null } | null)?.nummerplaat?.trim() ?? "";
+      const merkModel = (vctx as { merk_model?: string | null } | null)?.merk_model?.trim() ?? "";
+      const insuranceCompany =
+        (vctx as { insurance_company?: string | null } | null)?.insurance_company?.trim() ?? "";
+      const policyNumber =
+        (vctx as { policy_number?: string | null } | null)?.policy_number?.trim() ?? "";
+
+      const patchPayload = { ...(row.payload as Record<string, unknown>) } as Record<string, unknown>;
+      const pPartyA = (patchPayload.partyA ?? {}) as Record<string, unknown>;
+      const pBestuurder = (pPartyA.bestuurder ?? {}) as Record<string, unknown>;
+      const pVoertuig = (pPartyA.voertuig ?? {}) as Record<string, unknown>;
+      const pVerzekering = (pPartyA.verzekering ?? {}) as Record<string, unknown>;
+
+      const curEmail =
+        typeof pBestuurder.email === "string" ? pBestuurder.email.trim() : "";
+      const curPlate =
+        typeof pVoertuig.nummerplaat === "string" ? pVoertuig.nummerplaat.trim() : "";
+
+      if (!curEmail) pBestuurder.email = email;
+      if (!curPlate && plate) pVoertuig.nummerplaat = plate;
+      if (typeof pVoertuig.merkModel !== "string" || !String(pVoertuig.merkModel).trim()) {
+        if (merkModel) pVoertuig.merkModel = merkModel;
+      }
+      if (
+        (typeof pVerzekering.maatschappij !== "string" ||
+          !String(pVerzekering.maatschappij).trim()) &&
+        insuranceCompany
+      ) {
+        pVerzekering.maatschappij = insuranceCompany;
+      }
+      if (
+        (typeof pVerzekering.polisnummer !== "string" ||
+          !String(pVerzekering.polisnummer).trim()) &&
+        policyNumber
+      ) {
+        pVerzekering.polisnummer = policyNumber;
+      }
+
+      pPartyA.bestuurder = pBestuurder;
+      pPartyA.voertuig = pVoertuig;
+      pPartyA.verzekering = pVerzekering;
+      patchPayload.partyA = pPartyA;
+
+      await adminClient
+        .from("ongeval_aangiften")
+        .update({
+          medewerker_id: medewerkerId,
+          payload: patchPayload,
+        })
+        .eq("id", reportId);
+    }
+  } catch (e) {
+    // best-effort enrichment; ignore failures
+  }
   const { data: companyRaw, error: companyErr } = await adminClient
     .from("company_profile")
     .select("id, name, claims_email")
@@ -288,7 +396,19 @@ export async function sendAccidentReport(
       pdfBytes = new Uint8Array(await blob.arrayBuffer());
       pdfFilename = `aanrijdingsformulier-scan-${reportId}.pdf`;
     } else {
-      pdfBytes = await buildAccidentPdfBytes(state);
+      pdfBytes = await buildAccidentPdfBytes(state, {
+        downloadDamagePhoto: async (p) => {
+          const { data: blob, error: dlErr } = await adminClient.storage
+            .from(p.bucket)
+            .download(p.path);
+          if (dlErr || !blob) throw new Error(dlErr?.message ?? "download_failed");
+          return {
+            bytes: new Uint8Array(await blob.arrayBuffer()),
+            mime: p.mime || "image/jpeg",
+            name: p.name || "foto",
+          };
+        },
+      });
       pdfFilename = `aanrijdingsformulier-${reportId}.pdf`;
     }
   } catch (e) {
@@ -314,10 +434,18 @@ export async function sendAccidentReport(
     submissionMode === "scan"
       ? buildScanSubject(state, driverName)
       : buildSubject(state, driverName);
+
+  const damagePhotos = Array.isArray((state as unknown as { damagePhotos?: unknown }).damagePhotos)
+    ? ((state as unknown as { damagePhotos: DamagePhoto[] }).damagePhotos ?? [])
+    : [];
+  const photoLines =
+    submissionMode === "wizard" && damagePhotos.length > 0
+      ? await buildDamagePhotoLines(adminClient, damagePhotos)
+      : [];
   const { html, text } =
     submissionMode === "scan"
       ? buildScanBody(state, reportId, driverName, options.appOrigin ?? null)
-      : buildBody(state, reportId, driverName, options.appOrigin ?? null);
+      : buildBody(state, reportId, driverName, options.appOrigin ?? null, photoLines);
 
   // Markeer "sending" zodat realtime-luisteraars (wizard) feedback krijgen.
   await supabase
@@ -364,6 +492,8 @@ export async function sendAccidentReport(
         email_attempts: (row.email_attempts ?? 0) + 1,
         email_error: null,
         status: "submitted",
+        fleet_unread: true,
+        fleet_read_at: null,
       })
       .eq("id", reportId);
     return {
@@ -411,6 +541,8 @@ export async function sendAccidentReport(
         email_attempts: (row.email_attempts ?? 0) + 1,
         email_error: null,
         status: "submitted",
+        fleet_unread: true,
+        fleet_read_at: null,
       })
       .eq("id", reportId);
 

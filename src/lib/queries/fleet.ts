@@ -9,7 +9,12 @@ export async function getMyVehicleContextByEmail(
   const { data, error } = await supabase
     .from("v_fleet_assistant_context")
     .select("*")
-    .eq("emailadres", email)
+    .ilike("emailadres", email)
+    // The view is not “one row per medewerker” — it can return multiple rows (documents join, etc).
+    // `maybeSingle()` fails with PGRST116 if >1 row; we just need a stable representative row.
+    .order("merk_model", { ascending: true })
+    .order("nummerplaat", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -30,7 +35,10 @@ export async function getMyContractByEmail(
     .select(
       "contract_id, goedkeuringsstatus, contracteinddatum, tco_plafond, optiebudget, leasingmaatschappij, wagen_categorie, merk_model"
     )
-    .eq("emailadres", email)
+    .ilike("emailadres", email)
+    .order("merk_model", { ascending: true })
+    .order("nummerplaat", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -49,7 +57,7 @@ export async function getMyDocumentsByEmail(
   const { data, error } = await supabase
     .from("v_fleet_assistant_context")
     .select("document_type, document_url, merk_model")
-    .eq("emailadres", email)
+    .ilike("emailadres", email)
     .not("document_type", "is", null);
 
   if (error) {

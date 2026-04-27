@@ -10,8 +10,13 @@ export type ChatIntent =
   | "charging_summary"
   | "charging_home_vs_public"
   | "reimbursement_status"
+  | "insurance_certificate"
+  | "new_car_order"
   | "accident_report"
+  | "tire_change"
+  | "lease_return_inspection"
   | "greeting"
+  | "acknowledgment"
   // Manager intents (stubs)
   | "fleet_overview"
   | "expiring_contracts"
@@ -23,6 +28,20 @@ export type ChatIntent =
   | "unknown";
 
 export type UserRole = "medewerker" | "fleet_manager";
+
+// ──────────────────────────────────────────────
+// Guided flows (multi-turn)
+// ──────────────────────────────────────────────
+export type ChatFlowId =
+  | "tire_change"
+  | "lease_return_inspection"
+  | "accident_report";
+
+export interface ChatFlowState {
+  id: ChatFlowId;
+  step: number;
+  answers?: Record<string, string>;
+}
 
 // ──────────────────────────────────────────────
 // Card system
@@ -55,6 +74,17 @@ export interface ChatResponseCta {
   href: string;
 }
 
+/**
+ * When the AI is uncertain, it flags a pending escalation instead of
+ * escalating automatically. The user must confirm via the CTA button.
+ */
+export interface PendingEscalation {
+  /** The original user question (for the escalation email body). */
+  question: string;
+  /** Human-readable reason shown to the medewerker. */
+  reason?: string;
+}
+
 export interface ChatResponse {
   intent: ChatIntent;
   title: string;
@@ -62,6 +92,13 @@ export interface ChatResponse {
   cards?: ResponseCard[];
   suggestions?: string[];
   cta?: ChatResponseCta;
+  /** Optional multi-turn flow state (persisted in assistant metadata). */
+  flow?: ChatFlowState;
+  /**
+   * When set, the response requires explicit user consent before escalating.
+   * The UI must show an "Escaleren naar Fleetmanager" button.
+   */
+  pendingEscalation?: PendingEscalation;
 }
 
 // ──────────────────────────────────────────────
@@ -88,7 +125,7 @@ export type ChatPostResponse = ChatResponse & {
 
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "fleet_manager";
   content: string;
   timestamp: Date;
   intent?: ChatIntent;
@@ -98,4 +135,6 @@ export interface ChatMessage {
   cta?: ChatResponseCta;
   /** User-uploaded files (names shown in the bubble; upload happens on send) */
   attachments?: ChatAttachment[];
+  /** When set, the message has a pending escalation awaiting user confirmation. */
+  pendingEscalation?: PendingEscalation;
 }

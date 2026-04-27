@@ -17,6 +17,9 @@ type LangDict = Record<OngevalLang, Dict>;
 // Step titles — worden in de header getoond via WizardShell.
 const STEP_TITLES: LangDict = {
   nl: {
+    incident_kind: "Wat wil je melden?",
+    safety_police: "Veiligheid & politie",
+    police_pv: "PV-nummer",
     submission_mode: "Hoe wil je aangifte doen?",
     scan_capture: "Papieren formulier scannen",
     driver_select: "Bestuurder",
@@ -58,9 +61,19 @@ const STEP_TITLES: LangDict = {
     overview_detail: "Overzicht",
     signature_a: "Handtekening A",
     signature_b: "Handtekening B",
+    vehicle_mobility: "Mobiliteit",
+    damage_type: "Type schade",
+    damage_glass: "Glasbreuk",
+    damage_theft_vandalism: "Diefstal / vandalisme",
+    damage_single_vehicle: "Eenzijdige schade",
+    franchise: "Eigen risico",
+    escalation: "Escalatie",
     complete: "Voltooiing",
   },
   fr: {
+    incident_kind: "Que souhaitez-vous déclarer ?",
+    safety_police: "Sécurité & police",
+    police_pv: "Numéro PV",
     submission_mode: "Comment souhaitez-vous déclarer ?",
     scan_capture: "Scanner le formulaire papier",
     driver_select: "Conducteur",
@@ -102,9 +115,19 @@ const STEP_TITLES: LangDict = {
     overview_detail: "Aperçu",
     signature_a: "Signature A",
     signature_b: "Signature B",
+    vehicle_mobility: "Mobilité",
+    damage_type: "Type de dommage",
+    damage_glass: "Bris de vitre",
+    damage_theft_vandalism: "Vol / vandalisme",
+    damage_single_vehicle: "Dommage unilatéral",
+    franchise: "Franchise",
+    escalation: "Escalade",
     complete: "Terminé",
   },
   en: {
+    incident_kind: "What do you want to report?",
+    safety_police: "Safety & police",
+    police_pv: "Police report no.",
     submission_mode: "How do you want to file the report?",
     scan_capture: "Scan paper form",
     driver_select: "Driver",
@@ -146,6 +169,13 @@ const STEP_TITLES: LangDict = {
     overview_detail: "Overview",
     signature_a: "Signature A",
     signature_b: "Signature B",
+    vehicle_mobility: "Mobility",
+    damage_type: "Damage type",
+    damage_glass: "Glass damage",
+    damage_theft_vandalism: "Theft / vandalism",
+    damage_single_vehicle: "Single-vehicle damage",
+    franchise: "Deductible",
+    escalation: "Escalation",
     complete: "Finished",
   },
 };
@@ -375,7 +405,6 @@ const UI_STRINGS: LangDict = {
     "insurance.valid_from": "Geldig vanaf",
     "insurance.valid_to": "Geldig tot",
     "insurance.agency": "Agentschap / makelaar",
-    "insurance.agency_contact": "Telefoon of e-mail agentschap",
 
     "vehicle.trailer_toggle": "Aanhangwagen aangekoppeld?",
     "vehicle.trailer_help":
@@ -406,6 +435,9 @@ const UI_STRINGS: LangDict = {
     "location.picker.searching": "Zoeken…",
     "location.picker.permission_denied": "Toegang tot locatie geweigerd.",
     "location.picker.unavailable": "Geolocatie niet beschikbaar in deze browser.",
+    "location.picker.insecure": "Locatie werkt enkel via https (of localhost).",
+    "location.picker.rate_limited": "Te veel verzoeken. Probeer zo meteen opnieuw.",
+    "location.picker.no_address": "Kon geen adres vinden voor deze locatie. Vul handmatig in.",
     "location.picker.geocode_failed": "Adres ophalen mislukt. Vul handmatig in.",
     "location.picker.locate_failed": "Locatie bepalen mislukt.",
 
@@ -580,10 +612,10 @@ const UI_STRINGS: LangDict = {
       "Je kan de aangifte stap-voor-stap invullen via de wizard, óf het papieren Europees aanrijdingsformulier scannen en doorsturen.",
     "submission_mode.wizard_title": "Volg de wizard",
     "submission_mode.wizard_desc":
-      "We loodsen je stap voor stap doorheen de aangifte. Aanbevolen wanneer je niets op papier hebt.",
+      "Stap voor stap invullen. Handig als je geen papieren formulier hebt.",
     "submission_mode.scan_title": "Papieren formulier scannen",
     "submission_mode.scan_desc":
-      "Maak foto's van het ingevulde papieren formulier en stuur de PDF rechtstreeks naar je fleetmanager.",
+      "Fotografeer het formulier en verstuur de PDF naar je fleetmanager.",
 
     "scan.pages_title": "Pagina's van het formulier",
     "scan.pages_help":
@@ -673,7 +705,6 @@ const UI_STRINGS: LangDict = {
     "insurance.valid_from": "Valable à partir du",
     "insurance.valid_to": "Valable jusqu'au",
     "insurance.agency": "Agence / courtier",
-    "insurance.agency_contact": "Téléphone ou e-mail de l'agence",
 
     "vehicle.trailer_toggle": "Remorque attelée ?",
     "vehicle.trailer_help":
@@ -703,6 +734,10 @@ const UI_STRINGS: LangDict = {
     "location.picker.searching": "Recherche…",
     "location.picker.permission_denied": "Accès à la position refusé.",
     "location.picker.unavailable": "Géolocalisation indisponible dans ce navigateur.",
+    "location.picker.insecure": "La position ne fonctionne qu’en https (ou localhost).",
+    "location.picker.rate_limited": "Trop de requêtes. Réessaie dans un instant.",
+    "location.picker.no_address":
+      "Adresse introuvable pour cette position. Complète manuellement.",
     "location.picker.geocode_failed":
       "Impossible de récupérer l'adresse. Veuillez la saisir manuellement.",
     "location.picker.locate_failed": "Impossible de déterminer la position.",
@@ -961,7 +996,6 @@ const UI_STRINGS: LangDict = {
     "insurance.valid_from": "Valid from",
     "insurance.valid_to": "Valid until",
     "insurance.agency": "Agency / broker",
-    "insurance.agency_contact": "Agency phone or email",
 
     "vehicle.trailer_toggle": "Trailer attached?",
     "vehicle.trailer_help":
@@ -991,6 +1025,9 @@ const UI_STRINGS: LangDict = {
     "location.picker.searching": "Searching…",
     "location.picker.permission_denied": "Location access denied.",
     "location.picker.unavailable": "Geolocation is not available in this browser.",
+    "location.picker.insecure": "Location only works over https (or localhost).",
+    "location.picker.rate_limited": "Too many requests. Try again shortly.",
+    "location.picker.no_address": "Could not find an address for this location. Fill it in manually.",
     "location.picker.geocode_failed":
       "Could not fetch address. Please enter it manually.",
     "location.picker.locate_failed": "Could not determine location.",

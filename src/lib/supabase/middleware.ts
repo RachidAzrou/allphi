@@ -4,9 +4,18 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    console.error(
+      "Missing env: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_ANON_KEY. Auth middleware is disabled.",
+    );
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -54,8 +63,25 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isLoginPage) {
+    let role: string | null = null;
+    try {
+      const { data: medewerker } = await supabase
+        .from("medewerkers")
+        .select("role, rol")
+        .ilike("emailadres", user.email ?? "")
+        .maybeSingle();
+      role =
+        (medewerker as { role?: string | null; rol?: string | null } | null)?.role ??
+        (medewerker as { role?: string | null; rol?: string | null } | null)?.rol ??
+        null;
+    } catch (e) {
+      console.error("[middleware] role lookup failed", e);
+      role = null;
+    }
+
+    const isFleet = role === "fleet_manager" || role === "management";
     const url = request.nextUrl.clone();
-    url.pathname = "/chat";
+    url.pathname = isFleet ? "/fleet-manager" : "/chat";
     return NextResponse.redirect(url);
   }
 

@@ -8,6 +8,7 @@ import { BrowserQRCodeReader } from "@zxing/browser";
 import { Keyboard, QrCode } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AppHeader } from "@/components/app-header";
+import { AllphiLoader } from "@/components/allphi-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -129,25 +130,24 @@ export function JoinClient() {
 
   if (hasPreset) {
     return (
-      <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+      <div className="app-canvas flex min-h-[100dvh] flex-col">
         <AppHeader userEmail="" userDisplayName="" />
-        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-4 py-10">
-          <div className="w-full rounded-2xl border border-black/[0.06] bg-white p-6 text-center shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-            <h2 className="font-heading text-xl font-semibold text-[#163247]">
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-4 px-safe py-10 safe-bottom">
+          <div className="app-card w-full rounded-2xl p-6 text-center">
+            <h2 className="font-heading text-xl font-semibold tracking-tight text-foreground">
               Dossier koppelen…
             </h2>
-            <p className="mt-2 text-[14px] leading-relaxed text-[#5F7382]">
+            <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
               Even geduld, we koppelen je aan het dossier van partij A.
             </p>
             {status === "error" || error ? (
-              <p className="mt-3 text-[13px] font-medium text-red-600">
+              <p className="mt-3 text-[13px] font-medium text-destructive">
                 {error ?? "Er ging iets mis. Vraag partij A om de QR opnieuw te tonen."}
               </p>
             ) : (
-              <div
-                className="mx-auto mt-4 h-6 w-6 animate-spin rounded-full border-2 border-[#2799D7]/30 border-t-[#2799D7]"
-                aria-hidden
-              />
+              <div className="mx-auto mt-4 flex items-center justify-center">
+                <AllphiLoader size={24} />
+              </div>
             )}
           </div>
         </main>
@@ -156,62 +156,63 @@ export function JoinClient() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+    <div className="app-canvas flex min-h-[100dvh] flex-col">
       <AppHeader userEmail="" userDisplayName="" />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 md:px-6 lg:px-8">
+      <main className="app-page-shell gap-4">
         <div>
-          <h2 className="font-heading text-xl font-semibold text-[#163247]">
+          <h2 className="font-heading text-xl font-semibold tracking-tight text-foreground">
             Dossier koppelen (partij B)
           </h2>
-          <p className="mt-2 text-[15px] leading-relaxed text-[#5F7382]">
+          <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
             Scan de QR-code van partij A om mee in te vullen, of voer de code
             manueel in.
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start">
-          <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-            <div className="flex items-center justify-between gap-2 border-b border-[#2799D7]/12 bg-gradient-to-r from-[#E8F4FB] via-white to-[#F7F9FC] px-4 py-3">
-              <div className="flex items-center gap-2 text-[#163247]">
-                <QrCode className="size-5 text-[#2799D7]" strokeWidth={1.75} />
+          <div className="app-card overflow-hidden rounded-2xl">
+            <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-gradient-to-r from-secondary via-card to-muted/30 px-4 py-3">
+              <div className="flex items-center gap-2 text-foreground">
+                <QrCode className="size-5 text-primary" strokeWidth={1.75} />
                 <p className="font-heading text-[15px] font-semibold">
                   QR scannen
                 </p>
               </div>
-              <p className="text-[12px] text-[#5F7382]">
+              <p className="text-[12px] text-muted-foreground">
                 {status === "joining" ? "Koppelen…" : "Camera"}
               </p>
             </div>
             <div className="p-4">
               <video
                 ref={videoRef}
-                className="aspect-[4/3] w-full rounded-xl bg-black/[0.05] object-cover"
+                className="aspect-[4/3] w-full rounded-xl bg-muted object-cover"
                 muted
                 playsInline
               />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-            <div className="flex items-center gap-2 text-[#163247]">
-              <Keyboard className="size-5 text-[#2799D7]" strokeWidth={1.75} />
+          <div className="app-card rounded-2xl px-4 py-4">
+            <div className="flex items-center gap-2 text-foreground">
+              <Keyboard className="size-5 text-primary" strokeWidth={1.75} />
               <p className="font-heading text-[15px] font-semibold">
                 Code manueel invoeren
               </p>
             </div>
-            <p className="mt-1 text-[13px] text-[#5F7382]">
+            <p className="mt-1 text-[13px] text-muted-foreground">
               Plak de link uit de QR-code, of gebruik het formaat{" "}
               <span className="font-mono">rid:secret</span>.
             </p>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
               <Input
                 value={manual}
                 onChange={(e) => setManual(e.target.value)}
                 placeholder="Plak link of rid:secret"
+                className="min-h-12 touch-manipulation sm:min-h-10 sm:flex-1"
               />
               <Button
                 type="button"
-                className="bg-[#2799D7] text-white hover:bg-[#1e7bb0]"
+                className="min-h-12 w-full touch-manipulation sm:min-h-10 sm:w-auto sm:shrink-0"
                 onClick={() => {
                   const parsed = parseJoinPayload(manual.trim());
                   if (!parsed) {
@@ -226,7 +227,7 @@ export function JoinClient() {
               </Button>
             </div>
             {error ? (
-              <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>
+              <p className="mt-3 text-[13px] font-medium text-destructive">{error}</p>
             ) : null}
           </div>
         </div>

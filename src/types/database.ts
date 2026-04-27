@@ -32,6 +32,11 @@ export interface FleetAssistantContext {
   document_url?: string;
   insurance_company?: string;
   policy_number?: string;
+  green_card_number?: string;
+  /** ISO date string (YYYY-MM-DD) */
+  green_card_valid_from?: string;
+  /** ISO date string (YYYY-MM-DD) */
+  green_card_valid_to?: string;
 }
 
 // ──────────────────────────────────────────────
@@ -118,6 +123,22 @@ export interface ReimbursementStatus {
 }
 
 // ──────────────────────────────────────────────
+// v_fleet_charging_monthly_overview
+// ──────────────────────────────────────────────
+export interface FleetChargingMonthlyOverview {
+  maand: string;
+  medewerker_id: string;
+  voornaam: string;
+  naam: string;
+  emailadres: string;
+  locatie_type: string;
+  aantal_sessies: number;
+  totaal_kwh: number;
+  totaal_kost: number;
+  open_kost: number;
+}
+
+// ──────────────────────────────────────────────
 // chat (persistent history — see supabase/migrations)
 // ──────────────────────────────────────────────
 export interface ChatConversationRow {
@@ -130,7 +151,7 @@ export interface ChatConversationRow {
 export interface ChatMessageRow {
   id: string;
   conversation_id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "fleet_manager";
   content: string;
   attachments: unknown;
   metadata: unknown;

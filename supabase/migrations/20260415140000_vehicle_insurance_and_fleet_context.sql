@@ -42,14 +42,45 @@ on public.vehicle_insurance (insurance_company, policy_number)
 where policy_number is not null and policy_number <> '';
 
 -- Seed default insurer for all known vehicles (only when empty).
-insert into public.vehicle_insurance (voertuig_vin, insurance_company)
-select fv.vin::text, 'P&V'
+insert into public.vehicle_insurance (
+  voertuig_vin,
+  insurance_company,
+  green_card_number,
+  green_card_valid_from,
+  green_card_valid_to
+)
+select
+  fv.vin::text,
+  'P&V',
+  '',
+  current_date,
+  (current_date + interval '1 year')::date
 from public.fleet_vehicles fv
 where fv.vin is not null
 on conflict (voertuig_vin) do update
-set insurance_company = excluded.insurance_company
-where public.vehicle_insurance.insurance_company is null
-   or public.vehicle_insurance.insurance_company = '';
+set
+  insurance_company = case
+    when public.vehicle_insurance.insurance_company is null
+      or public.vehicle_insurance.insurance_company = ''
+      then excluded.insurance_company
+    else public.vehicle_insurance.insurance_company
+  end,
+  green_card_number = case
+    when public.vehicle_insurance.green_card_number is null
+      or public.vehicle_insurance.green_card_number = ''
+      then excluded.green_card_number
+    else public.vehicle_insurance.green_card_number
+  end,
+  green_card_valid_from = case
+    when public.vehicle_insurance.green_card_valid_from is null
+      then excluded.green_card_valid_from
+    else public.vehicle_insurance.green_card_valid_from
+  end,
+  green_card_valid_to = case
+    when public.vehicle_insurance.green_card_valid_to is null
+      then excluded.green_card_valid_to
+    else public.vehicle_insurance.green_card_valid_to
+  end;
 
 -- Extend fleet assistant context with insurance info (if present).
 create or replace view public.v_fleet_assistant_context as
@@ -83,7 +114,10 @@ select
   vd.document_type,
   vd.document_url,
   vi.insurance_company,
-  vi.policy_number
+  vi.policy_number,
+  vi.green_card_number,
+  vi.green_card_valid_from,
+  vi.green_card_valid_to
 from medewerkers m
   join fleet_vehicles fv on fv.medewerker_id = m.id
   join vehicle_catalog vc on fv.catalog_id = vc.catalog_id

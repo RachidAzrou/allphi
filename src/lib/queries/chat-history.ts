@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ChatMessage, ChatResponse } from "@/types/chat";
+import type { ChatFlowState, ChatMessage, ChatResponse, PendingEscalation } from "@/types/chat";
 import { signStoredAttachments } from "@/lib/chat/sign-attachments";
 
 export interface StoredChatAttachment {
@@ -32,9 +32,27 @@ export async function getOrCreateConversationId(
   return created.id;
 }
 
+export async function fetchLastAssistantMeta(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<AssistantMsgMeta | null> {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("metadata")
+    .eq("conversation_id", conversationId)
+    .eq("role", "assistant")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  const meta = (data?.metadata ?? null) as AssistantMsgMeta | null;
+  return meta;
+}
+
 interface ChatMessageRow {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "fleet_manager";
   content: string;
   attachments: StoredChatAttachment[] | null;
   metadata: AssistantMsgMeta | null;
@@ -47,7 +65,11 @@ interface AssistantMsgMeta {
   cards?: ChatMessage["cards"];
   suggestions?: string[];
   cta?: ChatMessage["cta"];
+  flow?: ChatFlowState;
+  pendingEscalation?: PendingEscalation;
 }
+
+export type { AssistantMsgMeta };
 
 export async function fetchChatMessagesForUser(
   supabase: SupabaseClient,
@@ -83,7 +105,7 @@ export async function fetchChatMessagesForUser(
         timestamp: new Date(row.created_at),
         attachments: attachments.length ? attachments : undefined,
       });
-    } else {
+    } else if (row.role === "assistant") {
       const meta = row.metadata as AssistantMsgMeta | null;
       out.push({
         id: row.id,
@@ -95,6 +117,14 @@ export async function fetchChatMessagesForUser(
         cards: meta?.cards,
         suggestions: meta?.suggestions,
         cta: meta?.cta,
+        pendingEscalation: meta?.pendingEscalation,
+      });
+    } else {
+      out.push({
+        id: row.id,
+        role: "fleet_manager",
+        content: row.content,
+        timestamp: new Date(row.created_at),
       });
     }
   }
@@ -139,6 +169,8 @@ export async function insertAssistantMessage(
       cards: result.cards,
       suggestions: result.suggestions,
       cta: result.cta,
+      flow: result.flow,
+      pendingEscalation: result.pendingEscalation,
     },
   });
   if (error) throw error;

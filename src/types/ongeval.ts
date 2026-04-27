@@ -2,10 +2,13 @@
  * Wizard payload stored in `ongeval_aangiften.payload` (jsonb) and typed in the client.
  * Bump `version` when making breaking shape changes and migrate old rows if needed.
  */
-export const ONGEVAL_PAYLOAD_VERSION = 3 as const;
+export const ONGEVAL_PAYLOAD_VERSION = 4 as const;
 
 /** All known wizard screen ids (extend when adding branches). */
 export type OngevalStepId =
+  | "incident_kind"
+  | "safety_police"
+  | "police_pv"
   | "submission_mode"
   | "scan_capture"
   | "driver_select"
@@ -47,6 +50,13 @@ export type OngevalStepId =
   | "overview_detail"
   | "signature_a"
   | "signature_b"
+  | "vehicle_mobility"
+  | "damage_type"
+  | "damage_glass"
+  | "damage_theft_vandalism"
+  | "damage_single_vehicle"
+  | "franchise"
+  | "escalation"
   | "complete";
 
 export type SubmissionMode = "wizard" | "scan";
@@ -179,6 +189,22 @@ export type SituationCategoryId =
   | "door"
   | "load";
 
+export type IncidentKind = "accident_with_other_party" | "damage_only";
+
+export type PoliceReason = "refused_to_sign" | "hit_and_run" | "suspected_impairment";
+
+export type DamageType = "glass" | "theft_vandalism" | "single_vehicle";
+
+export type DamagePhoto = {
+  bucket: "ongeval-photos";
+  path: string;
+  name: string;
+  mime: string;
+  uploadedAt: string;
+};
+
+export type EmployeeLevel = 1 | 2 | 3;
+
 /**
  * Full wizard state: answers + UI navigation.
  * `navigationHistory` holds prior step ids when using “Terug” (stack).
@@ -204,6 +230,15 @@ export type AccidentReportState = {
   role: "A" | "B" | null;
   partyBLanguage: "nl" | "fr" | "en" | null;
   wantsFillPartyB: boolean | null;
+
+  /** Hoofdkeuze: ongeval met tegenpartij vs schade zonder tegenpartij. */
+  incidentKind: IncidentKind | null;
+
+  /** Veiligheid / politie instructies (deterministische beslisboom). */
+  vehicleParkedSafe: boolean | null;
+  policeReasons: PoliceReason[];
+  policeReportNumber: string;
+  hitAndRun: boolean | null;
 
   driverWasEmployee: boolean | null;
   employeeDriver: Driver;
@@ -302,6 +337,30 @@ export type AccidentReportState = {
 
   /** Dismissed info banners per step id */
   dismissedBanners: Record<string, boolean>;
+
+  /** Mobiliteit en takelbeslissing (na melding). */
+  vehicleMobile: boolean | null;
+  towingRequired: boolean | null;
+
+  /** Schade-only track */
+  damageType: DamageType | null;
+  photosTaken: boolean | null;
+  damagePhotos: DamagePhoto[];
+  glassRepairProvider: string;
+  claimNotes: string;
+
+  /** Franchise / eigen risico */
+  employeeLevel: EmployeeLevel | null;
+  /** Optionele schatting (EUR) om uitzonderingsregel te tonen. */
+  repairCostEstimateEur: number | null;
+
+  /** Escalatie (human-in-the-loop) signalen */
+  escalation: {
+    uncertainLiability: boolean;
+    heavyOrComplexDamage: boolean;
+    grossNegligenceSuspected: boolean;
+    unreportedDamageAtReturn: boolean;
+  };
 };
 
 export function createInitialAccidentState(): AccidentReportState {
@@ -356,7 +415,7 @@ export function createInitialAccidentState(): AccidentReportState {
 
   return {
     version: ONGEVAL_PAYLOAD_VERSION,
-    currentStepId: "submission_mode",
+    currentStepId: "incident_kind",
     navigationHistory: [],
     submissionMode: null,
     scanSubmission: {
@@ -375,6 +434,11 @@ export function createInitialAccidentState(): AccidentReportState {
     role: null,
     partyBLanguage: null,
     wantsFillPartyB: null,
+    incidentKind: null,
+    vehicleParkedSafe: null,
+    policeReasons: [],
+    policeReportNumber: "",
+    hitAndRun: null,
     driverWasEmployee: null,
     employeeDriver: emptyDriver(),
     otherDriver: emptyDriver(),
@@ -415,5 +479,20 @@ export function createInitialAccidentState(): AccidentReportState {
     signaturePartyA: null,
     signaturePartyB: null,
     dismissedBanners: {},
+    vehicleMobile: null,
+    towingRequired: null,
+    damageType: null,
+    photosTaken: null,
+    damagePhotos: [],
+    glassRepairProvider: "Carglass",
+    claimNotes: "",
+    employeeLevel: null,
+    repairCostEstimateEur: null,
+    escalation: {
+      uncertainLiability: false,
+      heavyOrComplexDamage: false,
+      grossNegligenceSuspected: false,
+      unreportedDamageAtReturn: false,
+    },
   };
 }

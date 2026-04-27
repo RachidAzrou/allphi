@@ -73,24 +73,27 @@ export function ImpactDiagram({
   // De afbeelding bevat in volgorde: motor, auto, vrachtwagen. We tonen de
   // gekleurde rand rond het diagram in de partij-kleur zodat het visueel
   // onderscheidbaar blijft welke partij dit is.
-  const accent = party === "A" ? "#2799D7" : "#D9A227";
+  const borderTint =
+    party === "A"
+      ? "color-mix(in srgb, var(--primary) 33%, transparent)"
+      : "color-mix(in srgb, var(--color-warning) 33%, transparent)";
 
   return (
     <div className={cn("flex flex-col items-center gap-3", !readOnly && "px-4 py-4") }>
       {label ? (
-        <p className="text-center text-[15px] font-medium text-[#163247]">
+        <p className="text-center text-[15px] font-medium text-foreground">
           {label}
         </p>
       ) : null}
       <div
         ref={boxRef}
         className={cn(
-          "relative aspect-[1024/797] w-full touch-none select-none overflow-hidden rounded-2xl border bg-white",
+          "relative aspect-[1024/797] w-full touch-none select-none overflow-hidden rounded-2xl border bg-card",
           readOnly
-            ? "max-w-[220px] shadow-[0_1px_4px_rgba(11,20,26,0.08)]"
-            : "max-w-[420px] cursor-crosshair shadow-[0_2px_16px_rgba(39,153,215,0.12)]",
+            ? "max-w-[220px] shadow-[0_12px_26px_rgba(24,28,32,0.06)]"
+            : "max-w-[420px] cursor-crosshair shadow-[0_12px_26px_rgba(24,28,32,0.06)]",
         )}
-        style={{ borderColor: `${accent}55` }}
+        style={{ borderColor: borderTint }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -139,7 +142,7 @@ export function ImpactDiagram({
         ) : null}
       </div>
       {!readOnly ? (
-        <p className="max-w-md text-center text-[13px] leading-snug text-[#5F7382]">
+        <p className="max-w-md text-center text-[13px] leading-snug text-muted-foreground">
           {hint ??
             "Kies het voertuigtype (motor, auto of vrachtwagen) en tik of sleep om aan te duiden waar je voertuig werd geraakt. De rode pijl wijst naar de eerste contactzone."}
         </p>

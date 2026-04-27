@@ -24,6 +24,8 @@ export function formatChargingSummaryResponse(
     `In totaal laadde je **${summary.totaal_kwh} kWh**.`,
     `De totale kost bedraagt **${eur(summary.totaal_kost)}**.`,
     `Gemiddeld kost een sessie **${eur(summary.gemiddelde_kost_per_sessie)}**.`,
+    ``,
+    `Tip: terugbetalingen worden meestal **maandelijks** verwerkt.`,
   ];
 
   return {
@@ -42,6 +44,7 @@ export function formatChargingSummaryResponse(
         ],
       },
     ],
+    cta: { label: "Bekijk details", href: "/laadkosten" },
     suggestions: ["Thuis of publiek", "Terugbetaling", "Mijn wagen"],
   };
 }
@@ -109,6 +112,7 @@ export function formatChargingComparisonResponse(
     title: "Thuis vs. Publiek",
     message: lines.join("\n"),
     cards: [{ type: "charging", title: "Thuis vs. Publiek", fields }],
+    cta: { label: "Bekijk details", href: "/laadkosten" },
     suggestions: ["Mijn laadkosten", "Terugbetaling", "Mijn wagen"],
   };
 }
@@ -158,6 +162,7 @@ export function formatReimbursementResponse(
         ],
       },
     ],
+    cta: { label: "Bekijk details", href: "/laadkosten" },
     suggestions: ["Mijn laadkosten", "Thuis of publiek", "Mijn wagen"],
   };
 }

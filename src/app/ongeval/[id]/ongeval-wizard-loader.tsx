@@ -78,7 +78,7 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
 
   if (error) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center p-6">
+      <div className="app-canvas flex min-h-[100dvh] items-center justify-center p-6">
         <ErrorState message={error} />
       </div>
     );
@@ -86,7 +86,7 @@ export function OngevalWizardLoader({ reportId }: OngevalWizardLoaderProps) {
 
   if (payload === null) {
     return (
-      <div className="flex min-h-[100dvh] flex-col">
+      <div className="app-canvas flex min-h-[100dvh] flex-col">
         <LoadingState context="ongeval" />
       </div>
     );

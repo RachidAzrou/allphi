@@ -7,6 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "kb:ingest": "node scripts/ingest-knowledge-base.mjs",
+    "supabase:create-fleetmanager": "node scripts/create-fleetmanager-user.mjs",
     "pwa:icons": "node scripts/process-pwa-icon.mjs"
   },
   "dependencies": {
@@ -18,12 +20,14 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
+    "mammoth": "^1.12.0",
     "next": "16.2.2",
     "next-pwa": "^5.6.0",
     "next-themes": "^0.4.6",
     "openai": "^6.34.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
+    "pdfkit": "^0.18.0",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

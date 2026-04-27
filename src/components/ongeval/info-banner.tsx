@@ -20,14 +20,14 @@ export function InfoBanner({
   return (
     <div
       className={cn(
-        "flex items-start gap-2 border-b border-[#2799D7]/12 bg-[#E8F4FB]/90 px-3 py-2.5 text-[13px] leading-snug text-[#163247]",
+        "app-surface flex items-start gap-2 border-b border-border/70 bg-secondary/60 px-3 py-2.5 text-[13px] leading-snug text-foreground",
         className,
       )}
     >
       <button
         type="button"
         onClick={onDismiss}
-        className="mt-0.5 shrink-0 rounded p-0.5 text-[#5F7382] hover:bg-black/[0.06]"
+        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-secondary"
         aria-label="Bericht sluiten"
       >
         <X className="size-4" strokeWidth={1.75} />

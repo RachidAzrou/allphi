@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { Lock, Loader2 } from "lucide-react";
+import { Lock } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { AllphiLoader } from "@/components/allphi-loader";
 
 export default function SetPasswordForm() {
   const [password, setPassword] = useState("");
@@ -14,6 +16,7 @@ export default function SetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isWijzigen = searchParams.get("wijzigen") === "1";
+  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +52,28 @@ export default function SetPasswordForm() {
           ? "Wachtwoord gewijzigd! Je wordt doorgestuurd."
           : "Wachtwoord ingesteld! Je wordt doorgestuurd.",
       );
-      router.push("/chat");
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user?.email) {
+        const { data: medewerker } = await supabase
+          .from("medewerkers")
+          .select("role, rol")
+          .ilike("emailadres", user.email)
+          .maybeSingle();
+
+        const role = (medewerker as { role?: string | null; rol?: string | null } | null)
+          ? (medewerker as { role?: string | null; rol?: string | null }).role ??
+            (medewerker as { role?: string | null; rol?: string | null }).rol ??
+            "medewerker"
+          : "medewerker";
+
+        const isFleet = role === "fleet_manager" || role === "management";
+        router.push(isFleet ? "/inbox" : "/chat");
+      } else {
+        router.push("/chat");
+      }
     } catch {
       toast.error("Er is een onverwachte fout opgetreden.");
     } finally {
@@ -62,28 +86,28 @@ export default function SetPasswordForm() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="w-full max-w-sm"
+      className="w-full max-w-sm touch-manipulation"
     >
       <div className="text-center mb-8">
         <div
-          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#2799D7] shadow-lg shadow-[#2799D7]/20"
+          className="stitch-gradient-fill mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-lg shadow-[0_12px_40px_rgba(0,98,142,0.22)]"
           aria-hidden={true}
         >
-          <Lock className="h-8 w-8 text-white" strokeWidth={1.75} />
+          <Lock className="h-8 w-8 text-primary-foreground" strokeWidth={1.75} />
         </div>
-        <h1 className="text-2xl font-heading font-bold text-[#163247]">
+        <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
           {isWijzigen ? "Wachtwoord wijzigen" : "Wachtwoord instellen"}
         </h1>
-        <p className="text-sm text-[#5F7382] mt-1.5">
+        <p className="mt-1.5 text-sm text-muted-foreground">
           {isWijzigen
             ? "Vul hieronder je nieuwe wachtwoord in."
             : "Kies een wachtwoord voor je Fleet Companion account."}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="touch-manipulation space-y-3">
         <div className="relative">
-          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#5F7382]" />
+          <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
           <input
             type="password"
             value={password}
@@ -93,15 +117,12 @@ export default function SetPasswordForm() {
             minLength={8}
             autoComplete="new-password"
             autoFocus
-            className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#DCE6EE] bg-white
-                       text-sm text-[#163247] placeholder:text-[#5F7382]/50
-                       focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30 focus:border-[#2799D7]
-                       transition-all"
+            className="w-full rounded-xl border border-input bg-card py-3 pl-11 pr-4 text-sm text-foreground transition-all placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
           />
         </div>
 
         <div className="relative">
-          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-[#5F7382]" />
+          <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
           <input
             type="password"
             value={confirm}
@@ -110,26 +131,19 @@ export default function SetPasswordForm() {
             required
             minLength={8}
             autoComplete="new-password"
-            className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#DCE6EE] bg-white
-                       text-sm text-[#163247] placeholder:text-[#5F7382]/50
-                       focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30 focus:border-[#2799D7]
-                       transition-all"
+            className="w-full rounded-xl border border-input bg-card py-3 pl-11 pr-4 text-sm text-foreground transition-all placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
           />
         </div>
 
-        <p className="text-xs text-[#5F7382] pl-1">Minstens 8 tekens</p>
+        <p className="pl-1 text-xs text-muted-foreground">Minstens 8 tekens</p>
 
         <button
           type="submit"
           disabled={isLoading || !password || !confirm}
-          className="w-full flex items-center justify-center px-4 py-3 rounded-xl
-                     bg-[#2799D7] text-white text-sm font-semibold
-                     hover:bg-[#1E7AB0] active:scale-[0.98]
-                     disabled:opacity-50 disabled:cursor-not-allowed
-                     transition-all duration-150 shadow-lg shadow-[#2799D7]/20"
+          className="stitch-btn-primary flex min-h-12 w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold shadow-md transition-[filter,transform] duration-150 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <AllphiLoader size={16} />
           ) : (
             isWijzigen ? "Nieuw wachtwoord opslaan" : "Wachtwoord opslaan"
           )}
@@ -139,9 +153,7 @@ export default function SetPasswordForm() {
           type="button"
           disabled={isLoading}
           onClick={() => router.push("/chat")}
-          className="w-full px-4 py-3 rounded-xl text-sm font-medium text-[#5F7382]
-                     transition-colors hover:bg-[#E8F4FB] hover:text-[#163247]
-                     disabled:opacity-50 disabled:pointer-events-none"
+          className="w-full rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
         >
           Annuleren
         </button>

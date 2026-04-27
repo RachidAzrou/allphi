@@ -11,7 +11,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group border-[#DCE6EE] bg-white text-[#163247] shadow-lg rounded-xl text-sm",
+            "group rounded-xl border border-border bg-card text-foreground text-sm shadow-[0_20px_40px_rgba(24,28,32,0.06)]",
           error: "!bg-red-50 !border-red-100 !text-red-700",
           success: "!bg-green-50 !border-green-100 !text-green-700",
           warning: "!bg-amber-50 !border-amber-100 !text-amber-700",

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Karla } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -10,8 +10,8 @@ const montserrat = Montserrat({
   display: "swap",
 });
 
-const karla = Karla({
-  variable: "--font-karla",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
@@ -49,8 +49,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#2799D7" },
-    { media: "(prefers-color-scheme: dark)", color: "#163247" },
+    { media: "(prefers-color-scheme: light)", color: "#f6faff" },
+    { media: "(prefers-color-scheme: dark)", color: "#181c20" },
   ],
 };
 
@@ -65,9 +65,9 @@ export default async function RootLayout({
   return (
     <html
       lang="nl"
-      className={`${montserrat.variable} ${karla.variable} h-full overflow-x-hidden`}
+      className={`${montserrat.variable} ${inter.variable} h-full overflow-x-hidden`}
     >
-      <body className="flex min-h-dvh flex-col antialiased [-webkit-tap-highlight-color:transparent] selection:bg-[#2799D7]/20 selection:text-[#163247]">
+      <body className="flex min-h-dvh flex-col antialiased [-webkit-tap-highlight-color:transparent] selection:bg-primary/20 selection:text-foreground">
         {children}
         <Toaster />
       </body>

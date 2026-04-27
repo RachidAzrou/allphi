@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Loader2, Lock, Mail, MapPin, Phone, User } from "lucide-react";
+import { Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { AppHeader } from "@/components/app-header";
 import { LoadingState } from "@/components/loading-state";
+import { AllphiLoader } from "@/components/allphi-loader";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,12 @@ type MedewerkerRow = Record<string, unknown> & {
   postcode?: string | null;
   stad?: string | null;
   land?: string | null;
+  rijbewijsnummer?: string | null;
+  rijbewijsNummer?: string | null;
+  rijbewijscategorie?: string | null;
+  rijbewijsCategorie?: string | null;
+  rijbewijsgeldigTot?: string | null;
+  rijbewijsGeldigTot?: string | null;
 };
 
 function asText(v: unknown): string {
@@ -78,6 +85,7 @@ export default function ProfielPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [tab, setTab] = useState<"persoon" | "adres" | "extra">("persoon");
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +148,19 @@ export default function ProfielPage() {
   const stad = asText(medewerker?.stad);
   const land = asText(medewerker?.land);
 
+  const firstNonEmptyString = (obj: unknown, keys: string[]): string => {
+    if (!obj || typeof obj !== "object") return "";
+    for (const k of keys) {
+      const v = (obj as any)[k];
+      if (typeof v === "string" && v.trim().length > 0) return v.trim();
+    }
+    return "";
+  };
+
+  const rijbewijsNummer = firstNonEmptyString(medewerker, ["rijbewijsNummer", "rijbewijsnummer"]);
+  const rijbewijsCategorie = firstNonEmptyString(medewerker, ["rijbewijsCategorie", "rijbewijscategorie"]);
+  const rijbewijsGeldigTot = firstNonEmptyString(medewerker, ["rijbewijsGeldigTot", "rijbewijsgeldigTot"]);
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -194,249 +215,286 @@ export default function ProfielPage() {
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+    <div className="app-canvas flex min-h-dvh flex-col">
       <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
 
       {loading ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-safe">
           <LoadingState subtitle="We halen je profielgegevens op…" />
         </div>
       ) : (
-        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 md:px-6 lg:px-8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]"
-                aria-hidden
-              >
-                <User className="size-5" strokeWidth={1.75} aria-hidden />
-              </span>
-              <h2 className="font-heading text-xl font-semibold text-[#163247]">
-                Mijn profiel
-              </h2>
-            </div>
-            <p className="mt-2 text-[15px] leading-relaxed text-[#5F7382]">
-              Je persoonlijke gegevens en contactinformatie.
-            </p>
-          </div>
+        <main className="app-page-shell">
+          <header className="flex items-center gap-3">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"
+              aria-hidden
+            >
+              <User className="size-5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
+              Mijn profiel
+            </h1>
+          </header>
 
-          <div className="flex flex-col gap-3 md:gap-4">
-            <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-              <div className="flex items-center gap-2 text-[#163247]">
-                <span
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10"
-                  aria-hidden
-                >
-                  <User className="size-4.5" strokeWidth={1.9} aria-hidden />
-                </span>
-                <p className="font-heading text-[15px] font-semibold tracking-tight text-[#163247]">
-                  Persoon
-                </p>
-              </div>
-              <div className="mt-3 space-y-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-[#5F7382]">Naam</p>
-                  <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                    {name || "—"}
-                  </p>
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-[#5F7382]">E-mail</p>
-                  <p className="mt-0.5 break-all text-[15px] font-semibold text-[#163247]">
-                    {email || "—"}
-                  </p>
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-[#5F7382]">Telefoon</p>
-                  <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                    {phone || "—"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-              <div className="flex items-center gap-2 text-[#163247]">
-                <span
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10"
-                  aria-hidden
-                >
-                  <MapPin className="size-4.5" strokeWidth={1.9} aria-hidden />
-                </span>
-                <p className="font-heading text-[15px] font-semibold tracking-tight text-[#163247]">
-                  Adres
-                </p>
-              </div>
-              <div className="mt-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-[#5F7382]">Adresgegevens</p>
-                  {address ? (
-                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Straat</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {straat || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Huisnummer</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {huisnummer || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Bus</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {bus || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Postcode</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {postcode || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Stad</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {stad || "—"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[12px] text-[#5F7382]">Land</p>
-                        <p className="mt-0.5 break-words text-[15px] font-semibold text-[#163247]">
-                          {land || "—"}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-0.5 whitespace-pre-line break-words text-[15px] font-semibold text-[#163247]">
-                      —
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)]">
-              <div className="flex items-center gap-2 text-[#163247]">
-                <span
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10"
-                  aria-hidden
-                >
-                  <KeyRound className="size-4.5" strokeWidth={1.9} aria-hidden />
-                </span>
-                <p className="font-heading text-[15px] font-semibold tracking-tight text-[#163247]">
-                  Beveiliging
-                </p>
-              </div>
-
-              <div className="mt-3">
-                <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-                  <DialogTrigger
-                    render={
-                      <Button
-                        type="button"
-                        className="h-11 w-full rounded-xl bg-[#2799D7] text-white hover:bg-[#1E7AB0]"
-                      />
-                    }
+          <div className="mt-6 flex flex-col gap-6">
+            <div className="app-ios-group p-1">
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    ["persoon", "Persoon"],
+                    ["adres", "Adres"],
+                    ["extra", "Extra"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setTab(id)}
+                    className={[
+                      "min-h-11 touch-manipulation rounded-xl px-3 text-[13px] font-semibold transition-colors",
+                      tab === id
+                        ? "stitch-gradient-fill shadow-sm"
+                        : "text-muted-foreground hover:bg-muted/40 active:bg-muted/60",
+                    ].join(" ")}
                   >
-                    Wachtwoord wijzigen
-                  </DialogTrigger>
-
-                  <DialogContent className="bg-white">
-                    <DialogHeader>
-                      <DialogTitle>Wachtwoord wijzigen</DialogTitle>
-                      <DialogDescription>
-                        Geef je huidige wachtwoord in en kies een nieuw wachtwoord (minstens 8
-                        tekens).
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <form onSubmit={handleChangePassword} className="space-y-3">
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#5F7382]" />
-                        <input
-                          type="password"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          placeholder="Huidig wachtwoord"
-                          required
-                          autoComplete="current-password"
-                          className="w-full rounded-xl border border-[#DCE6EE] bg-white py-3 pl-11 pr-4 text-sm text-[#163247] placeholder:text-[#5F7382]/50 transition-all focus:border-[#2799D7] focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30"
-                        />
-                      </div>
-
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#5F7382]" />
-                        <input
-                          type="password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Nieuw wachtwoord"
-                          required
-                          minLength={8}
-                          autoComplete="new-password"
-                          className="w-full rounded-xl border border-[#DCE6EE] bg-white py-3 pl-11 pr-4 text-sm text-[#163247] placeholder:text-[#5F7382]/50 transition-all focus:border-[#2799D7] focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30"
-                        />
-                      </div>
-
-                      <div className="relative">
-                        <Lock className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#5F7382]" />
-                        <input
-                          type="password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Bevestig nieuw wachtwoord"
-                          required
-                          minLength={8}
-                          autoComplete="new-password"
-                          className="w-full rounded-xl border border-[#DCE6EE] bg-white py-3 pl-11 pr-4 text-sm text-[#163247] placeholder:text-[#5F7382]/50 transition-all focus:border-[#2799D7] focus:outline-none focus:ring-2 focus:ring-[#2799D7]/30"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-2 pt-1">
-                        <Button
-                          type="submit"
-                          disabled={
-                            isSavingPassword ||
-                            !currentPassword ||
-                            !newPassword ||
-                            !confirmPassword
-                          }
-                          className="h-11 w-full rounded-xl bg-[#2799D7] text-white hover:bg-[#1E7AB0]"
-                        >
-                          {isSavingPassword ? (
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                          ) : (
-                            "Wachtwoord opslaan"
-                          )}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={isSavingPassword}
-                          className="h-11 w-full rounded-xl"
-                          onClick={() => {
-                            setPasswordDialogOpen(false);
-                            setCurrentPassword("");
-                            setNewPassword("");
-                            setConfirmPassword("");
-                          }}
-                        >
-                          Annuleren
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
+            {tab === "persoon" ? (
+              <section aria-labelledby="profiel-persoon-heading">
+                <h2
+                  id="profiel-persoon-heading"
+                  className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Persoon
+                </h2>
+                <div className="app-ios-group divide-y divide-border/60">
+                  <div className="px-4 py-3.5">
+                    <p className="text-[13px] font-medium text-muted-foreground">Naam</p>
+                    <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                      {name || "—"}
+                    </p>
+                  </div>
+                  <div className="px-4 py-3.5">
+                    <p className="text-[13px] font-medium text-muted-foreground">E-mail</p>
+                    <p className="mt-0.5 break-all text-[15px] font-semibold text-foreground">
+                      {email || "—"}
+                    </p>
+                  </div>
+                  <div className="px-4 py-3.5">
+                    <p className="text-[13px] font-medium text-muted-foreground">Telefoon</p>
+                    <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                      {phone || "—"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {tab === "adres" ? (
+              <section aria-labelledby="profiel-adres-heading">
+                <h2
+                  id="profiel-adres-heading"
+                  className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Adres
+                </h2>
+                {address ? (
+                  <div className="app-ios-group divide-y divide-border/60">
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Straat</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {straat || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Huisnummer</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {huisnummer || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Bus</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {bus || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Postcode</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {postcode || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Stad</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {stad || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Land</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {land || "—"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="app-ios-group px-4 py-3.5">
+                    <p className="text-[13px] font-medium text-muted-foreground">Adresgegevens</p>
+                    <p className="mt-0.5 text-[15px] font-semibold text-foreground">—</p>
+                  </div>
+                )}
+              </section>
+            ) : null}
+
+            {tab === "extra" ? (
+              <>
+                <section aria-labelledby="profiel-extra-heading">
+                  <h2
+                    id="profiel-extra-heading"
+                    className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    Extra gegevens
+                  </h2>
+                  <div className="app-ios-group divide-y divide-border/60">
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">
+                        Rijbewijsnummer
+                      </p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {rijbewijsNummer || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Categorie</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {rijbewijsCategorie || "—"}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3.5">
+                      <p className="text-[13px] font-medium text-muted-foreground">Geldig tot</p>
+                      <p className="mt-0.5 break-words text-[15px] font-semibold text-foreground">
+                        {rijbewijsGeldigTot || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section aria-labelledby="profiel-beveiliging-heading">
+                  <h2
+                    id="profiel-beveiliging-heading"
+                    className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    Beveiliging
+                  </h2>
+                  <div className="app-ios-group p-4">
+                    <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+                      <DialogTrigger
+                        render={
+                          <Button
+                            type="button"
+                            className="min-h-12 w-full touch-manipulation rounded-xl"
+                          />
+                        }
+                      >
+                        Wachtwoord wijzigen
+                      </DialogTrigger>
+
+                      <DialogContent className="bg-card">
+                        <DialogHeader>
+                          <DialogTitle>Wachtwoord wijzigen</DialogTitle>
+                          <DialogDescription>
+                            Geef je huidige wachtwoord in en kies een nieuw wachtwoord (minstens 8
+                            tekens).
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <form onSubmit={handleChangePassword} className="space-y-3">
+                          <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              type="password"
+                              value={currentPassword}
+                              onChange={(e) => setCurrentPassword(e.target.value)}
+                              placeholder="Huidig wachtwoord"
+                              required
+                              autoComplete="current-password"
+                              className="stitch-focus-input min-h-12 w-full rounded-xl border border-input bg-card py-3 pl-11 pr-4 text-base text-foreground transition-all placeholder:text-muted-foreground/50 sm:text-sm"
+                            />
+                          </div>
+
+                          <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              placeholder="Nieuw wachtwoord"
+                              required
+                              minLength={8}
+                              autoComplete="new-password"
+                              className="stitch-focus-input min-h-12 w-full rounded-xl border border-input bg-card py-3 pl-11 pr-4 text-base text-foreground transition-all placeholder:text-muted-foreground/50 sm:text-sm"
+                            />
+                          </div>
+
+                          <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              placeholder="Bevestig nieuw wachtwoord"
+                              required
+                              minLength={8}
+                              autoComplete="new-password"
+                              className="stitch-focus-input min-h-12 w-full rounded-xl border border-input bg-card py-3 pl-11 pr-4 text-base text-foreground transition-all placeholder:text-muted-foreground/50 sm:text-sm"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-2 pt-1">
+                            <Button
+                              type="submit"
+                              disabled={
+                                isSavingPassword ||
+                                !currentPassword ||
+                                !newPassword ||
+                                !confirmPassword
+                              }
+                              className="min-h-12 w-full touch-manipulation rounded-xl"
+                            >
+                              {isSavingPassword ? (
+                                <AllphiLoader size={16} />
+                              ) : (
+                                "Wachtwoord opslaan"
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={isSavingPassword}
+                              className="min-h-12 w-full touch-manipulation rounded-xl"
+                              onClick={() => {
+                                setPasswordDialogOpen(false);
+                                setCurrentPassword("");
+                                setNewPassword("");
+                                setConfirmPassword("");
+                              }}
+                            >
+                              Annuleren
+                            </Button>
+                          </div>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </section>
+              </>
+            ) : null}
           </div>
-        </div>
+        </main>
       )}
     </div>
   );

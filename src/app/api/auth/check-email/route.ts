@@ -17,10 +17,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ exists: false });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error(
+        "[check-email] Missing env: NEXT_PUBLIC_SUPABASE_URL and/or (SUPABASE_SERVICE_ROLE_KEY | NEXT_PUBLIC_SUPABASE_ANON_KEY)",
+      );
+      return NextResponse.json(
+        { exists: false, error: "missing_env" },
+        { status: 500 },
+      );
+    }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 

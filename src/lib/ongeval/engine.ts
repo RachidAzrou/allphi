@@ -6,8 +6,10 @@ import type {
 import { createInitialAccidentState } from "@/types/ongeval";
 import { toIsoDate, toIsoTime } from "@/lib/ongeval/date-utils";
 
-const PHASE_ORDER: OngevalStepId[][] = [
+const ACCIDENT_PHASE_ORDER: OngevalStepId[][] = [
   [
+    "incident_kind",
+    "safety_police",
     "submission_mode",
     "driver_select",
     "driver_employee_form",
@@ -50,7 +52,13 @@ const PHASE_ORDER: OngevalStepId[][] = [
     "accident_sketch",
   ],
   ["overview_intro", "overview_detail"],
-  ["signature_a", "signature_b", "complete"],
+  ["signature_a", "signature_b", "vehicle_mobility", "escalation", "complete"],
+];
+
+const DAMAGE_PHASE_ORDER: OngevalStepId[][] = [
+  ["incident_kind", "damage_type"],
+  ["damage_glass", "damage_theft_vandalism", "damage_single_vehicle", "police_pv"],
+  ["franchise", "vehicle_mobility", "escalation", "complete"],
 ];
 
 /**
@@ -58,9 +66,9 @@ const PHASE_ORDER: OngevalStepId[][] = [
  * 1) modus kiezen, 2) pagina's scannen, 3) bevestigen + verzenden.
  */
 const SCAN_PHASE_ORDER: OngevalStepId[][] = [
-  ["submission_mode"],
+  ["incident_kind", "safety_police", "submission_mode"],
   ["scan_capture"],
-  ["complete"],
+  ["vehicle_mobility", "escalation", "complete"],
 ];
 
 const SCAN_TRACK_STEP_IDS = new Set<OngevalStepId>(["scan_capture"]);
@@ -103,9 +111,28 @@ export function getProgressForStep(
   total: number;
   fraction: number;
 } {
+  const inferredIncident =
+    state?.incidentKind ??
+    ([
+      "damage_type",
+      "damage_glass",
+      "damage_theft_vandalism",
+      "damage_single_vehicle",
+      "franchise",
+    ].includes(stepId)
+      ? "damage_only"
+      : "accident_with_other_party");
+
   const usingScanTrack =
-    state?.submissionMode === "scan" || SCAN_TRACK_STEP_IDS.has(stepId);
-  const phases = usingScanTrack ? SCAN_PHASE_ORDER : PHASE_ORDER;
+    inferredIncident === "accident_with_other_party" &&
+    (state?.submissionMode === "scan" || SCAN_TRACK_STEP_IDS.has(stepId));
+
+  const phases =
+    inferredIncident === "damage_only"
+      ? DAMAGE_PHASE_ORDER
+      : usingScanTrack
+        ? SCAN_PHASE_ORDER
+        : ACCIDENT_PHASE_ORDER;
   const total = phases.length;
   let phaseIndex = 0;
   for (let i = 0; i < phases.length; i++) {
@@ -213,11 +240,38 @@ export function getNextStepId(
   state: AccidentReportState,
 ): OngevalStepId | null {
   switch (from) {
+    case "incident_kind":
+      if (state.incidentKind === "damage_only") return "damage_type";
+      if (state.incidentKind === "accident_with_other_party") return "safety_police";
+      return "incident_kind";
+    case "safety_police":
+      // Voor ongeval-flow gaan we altijd via de submission-mode picker
+      // (wizard vs scan). Schade-flow komt hier niet.
+      return "submission_mode";
+    case "police_pv":
+      return "franchise";
+    case "damage_type":
+      if (state.damageType === "glass") return "damage_glass";
+      if (state.damageType === "theft_vandalism") return "damage_theft_vandalism";
+      if (state.damageType === "single_vehicle") return "damage_single_vehicle";
+      return "damage_type";
+    case "damage_glass":
+      return "franchise";
+    case "damage_theft_vandalism":
+      return "police_pv";
+    case "damage_single_vehicle":
+      return "franchise";
+    case "franchise":
+      return "vehicle_mobility";
+    case "vehicle_mobility":
+      return "escalation";
+    case "escalation":
+      return "complete";
     case "submission_mode":
       if (state.submissionMode === "scan") return "scan_capture";
       return "driver_select";
     case "scan_capture":
-      return "complete";
+      return "vehicle_mobility";
     case "driver_select":
       return afterDriverSelect(state);
     case "driver_employee_form":
@@ -293,7 +347,7 @@ export function getNextStepId(
     case "signature_a":
       return "signature_b";
     case "signature_b":
-      return "complete";
+      return "vehicle_mobility";
     case "complete":
       return null;
     default:
@@ -341,6 +395,33 @@ export function validateStep(
 ): boolean {
   const loc = state.location;
   switch (stepId) {
+    case "incident_kind":
+      return state.incidentKind !== null;
+    case "safety_police":
+      // Veiligheidsstap is informatief; we vragen enkel bevestiging dat men dit gezien heeft.
+      return state.vehicleParkedSafe !== null;
+    case "damage_type":
+      return state.damageType !== null;
+    case "damage_glass":
+      return (
+        state.photosTaken !== null &&
+        (state.photosTaken === false || state.damagePhotos.length > 0)
+      );
+    case "damage_theft_vandalism":
+      return state.damagePhotos.length > 0;
+    case "damage_single_vehicle":
+      return (
+        state.photosTaken !== null &&
+        (state.photosTaken === false || state.damagePhotos.length > 0)
+      );
+    case "police_pv":
+      return state.policeReportNumber.trim().length > 0;
+    case "franchise":
+      return state.employeeLevel !== null;
+    case "vehicle_mobility":
+      return state.vehicleMobile !== null;
+    case "escalation":
+      return true;
     case "submission_mode":
       return state.submissionMode !== null;
     case "scan_capture": {
@@ -366,7 +447,9 @@ export function validateStep(
         state.otherDriver.adres.postcode.trim().length > 0 &&
         state.otherDriver.adres.stad.trim().length > 0 &&
         state.otherDriver.adres.land.trim().length > 0 &&
-        state.otherDriver.rijbewijsNummer.trim().length > 0
+        state.otherDriver.rijbewijsNummer.trim().length > 0 &&
+        state.otherDriver.rijbewijsCategorie.trim().length > 0 &&
+        state.otherDriver.rijbewijsGeldigTot.trim().length > 0
       );
     case "driver_employee_form":
       return (
@@ -378,7 +461,9 @@ export function validateStep(
         state.employeeDriver.adres.postcode.trim().length > 0 &&
         state.employeeDriver.adres.stad.trim().length > 0 &&
         state.employeeDriver.adres.land.trim().length > 0 &&
-        state.employeeDriver.rijbewijsNummer.trim().length > 0
+        state.employeeDriver.rijbewijsNummer.trim().length > 0 &&
+        state.employeeDriver.rijbewijsCategorie.trim().length > 0 &&
+        state.employeeDriver.rijbewijsGeldigTot.trim().length > 0
       );
     case "policyholder_select":
       return Boolean(state.partyA.verzekeringsnemerType);
@@ -542,6 +627,9 @@ export function validateStep(
 
 export function getStepTitle(stepId: OngevalStepId): string {
   const titles: Record<OngevalStepId, string> = {
+    incident_kind: "Wat wil je melden?",
+    safety_police: "Veiligheid & politie",
+    police_pv: "PV-nummer",
     submission_mode: "Hoe wil je aangifte doen?",
     scan_capture: "Papieren formulier scannen",
     driver_select: "Bestuurder",
@@ -583,6 +671,13 @@ export function getStepTitle(stepId: OngevalStepId): string {
     overview_detail: "Overzicht",
     signature_a: "Handtekening A",
     signature_b: "Handtekening B",
+    vehicle_mobility: "Mobiliteit",
+    damage_type: "Type schade",
+    damage_glass: "Glasbreuk",
+    damage_theft_vandalism: "Diefstal / vandalisme",
+    damage_single_vehicle: "Eenzijdige schade",
+    franchise: "Eigen risico",
+    escalation: "Escalatie",
     complete: "Voltooiing",
   };
   return titles[stepId];
@@ -769,6 +864,22 @@ export function mergePayloadIntoState(
       ? (o.navigationHistory as OngevalStepId[])
       : base.navigationHistory,
   } as AccidentReportState;
+
+  // Backwards-compat: oude drafts (voor incident-keuze) beschouwen we als
+  // "ongeval met tegenpartij", zodat ze niet naar het begin terugvallen.
+  if (merged.incidentKind === null) {
+    const damageSteps = new Set<OngevalStepId>([
+      "damage_type",
+      "damage_glass",
+      "damage_theft_vandalism",
+      "damage_single_vehicle",
+      "franchise",
+      "police_pv",
+    ]);
+    if (!damageSteps.has(merged.currentStepId)) {
+      merged.incidentKind = "accident_with_other_party";
+    }
+  }
 
   // Guard against legacy step ids that no longer exist in the flow.
   const legacyReset = new Set(["party_a_mode", "party_b_mode"]);

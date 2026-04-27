@@ -96,6 +96,7 @@ type WizardShellProps = {
   onBack: () => void;
   showBack?: boolean;
   onExit: () => void;
+  showExit?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
   /** Effectieve UI-taal (B kiest een taal; anders NL). */
@@ -113,6 +114,7 @@ export function WizardShell({
   onBack,
   showBack = true,
   onExit,
+  showExit = true,
   children,
   footer,
   lang = "nl",
@@ -138,11 +140,11 @@ export function WizardShell({
   return (
     <div
       className={cn(
-        "flex flex-col bg-white",
+        "app-canvas flex flex-col",
         embedded ? "h-full min-h-0 max-h-full" : "min-h-[100dvh]",
       )}
     >
-      <header className="sticky top-0 z-40 safe-top shrink-0 border-b border-white/15 bg-gradient-to-b from-[#2799D7] to-[#2389C4] text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]">
+      <header className="sticky top-0 z-40 safe-top shrink-0 border-b border-white/15 bg-gradient-to-b from-primary to-primary/85 text-white shadow-[0_1px_0_rgba(0,0,0,0.06)]">
         <div className="flex h-[52px] min-h-[52px] items-center px-1 pr-safe">
           {showBack ? (
             <button
@@ -166,14 +168,18 @@ export function WizardShell({
               {title}
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={onExit}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-[#FCA5A5]/35 hover:text-white active:bg-[#F87171]/55"
-            aria-label={exitAria}
-          >
-            <LogOut className="size-5" strokeWidth={1.75} />
-          </button>
+          {showExit ? (
+            <button
+              type="button"
+              onClick={onExit}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full transition-colors hover:bg-destructive/30 hover:text-white active:bg-destructive/45"
+              aria-label={exitAria}
+            >
+              <LogOut className="size-5" strokeWidth={1.75} />
+            </button>
+          ) : (
+            <div className="h-11 w-11 shrink-0" aria-hidden />
+          )}
         </div>
         <div className="relative mx-3 mb-1 h-[3px] overflow-hidden rounded-full bg-white/20">
           <div
@@ -204,7 +210,7 @@ export function WizardShell({
       </main>
 
       {footer ? (
-        <div className="sticky bottom-0 z-30 shrink-0 border-t border-[#2799D7]/10 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(11,20,26,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/90">
+        <div className="app-surface sticky bottom-0 z-30 shrink-0 border-t border-border/70 bg-background/70 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(11,20,26,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
           {footer}
         </div>
       ) : null}
@@ -231,8 +237,8 @@ export function WizardFooterButton({
       className={cn(
         "flex min-h-14 w-full items-center justify-center px-4 text-[16px] font-semibold tracking-tight transition-[opacity,transform] active:scale-[0.998] disabled:opacity-40",
         variant === "primary"
-          ? "bg-[#2799D7] text-white shadow-[inset_0_-1px_0_rgba(0,0,0,0.08)] hover:bg-[#2389C4] active:bg-[#1e7bb0]"
-          : "border-t border-black/[0.06] bg-[#F0F4F8] text-[#163247] hover:bg-[#E8EEF3] active:bg-[#E2E9EF]",
+          ? "stitch-btn-primary shadow-[0_14px_30px_rgba(0,98,142,0.2)] active:scale-[0.99]"
+          : "border-t border-border/70 bg-secondary/70 text-foreground hover:bg-secondary active:bg-secondary/80",
       )}
     >
       {label}

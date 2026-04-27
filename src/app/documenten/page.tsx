@@ -2,21 +2,93 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, FileText } from "lucide-react";
+import { ChevronRight, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { AppHeader } from "@/components/app-header";
 import { LoadingState } from "@/components/loading-state";
+import { cn } from "@/lib/utils";
 import type { FleetAssistantContext } from "@/types/database";
 import { PiFolderUserBold } from "react-icons/pi";
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import { SiEuropeanunion } from "react-icons/si";
+import { BsPostcard } from "react-icons/bs";
+import { Input } from "@/components/ui/input";
 
 type DocItem = {
   title: string;
   subtitle?: string;
   url: string;
 };
+
+const iosRowClass =
+  "touch-manipulation flex items-center gap-3 border-b border-border/60 px-4 py-3.5 no-underline last:border-b-0 active:bg-muted/40 sm:px-4";
+
+/** Verbergt “(PDF)” aan het einde van titels in de lijst (ook voor API-teksten). */
+function displayDocTitle(title: string): string {
+  return title.replace(/\s*\(PDF\)\s*$/i, "").trim();
+}
+
+function docKindFromUrl(url: string): "PDF" | "DOC" | "LINK" {
+  const u = (url ?? "").toLowerCase();
+  if (u.includes("/api/")) return "PDF";
+  if (u.endsWith(".pdf")) return "PDF";
+  if (u.endsWith(".doc") || u.endsWith(".docx")) return "DOC";
+  return "LINK";
+}
+
+function DocKindBadge({ kind }: { kind: "PDF" | "DOC" | "LINK" }) {
+  return (
+    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+      {kind}
+    </span>
+  );
+}
+
+function DocRowIcon({ doc }: { doc: DocItem }) {
+  if (doc.url === "/AANRIJDINGSFORMULIER.pdf") {
+    return (
+      <span
+        className="relative flex size-8 shrink-0 items-center justify-center sm:size-9"
+        aria-hidden
+      >
+        <SiEuropeanunion
+          className="size-7 text-primary/35 sm:size-8"
+          aria-hidden
+        />
+        <span className="absolute inset-0 flex items-center justify-center font-heading text-[10px] font-extrabold tracking-wide text-primary sm:text-[11px]">
+          EU
+        </span>
+      </span>
+    );
+  }
+  if (
+    doc.url === "/api/insurance/green-card" ||
+    doc.title.toLowerCase().includes("groene kaart")
+  ) {
+    return (
+      <BsPostcard
+        className="size-7 shrink-0 text-primary/65 sm:size-8"
+        aria-hidden
+      />
+    );
+  }
+  if (doc.title.toLowerCase().includes("offerte")) {
+    return (
+      <IoDocumentAttachOutline
+        className="size-7 shrink-0 text-primary/70 sm:size-8"
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <FileText
+      className="size-7 shrink-0 text-primary/60 sm:size-8"
+      strokeWidth={2}
+      aria-hidden
+    />
+  );
+}
 
 export default function DocumentenPage() {
   const router = useRouter();
@@ -26,6 +98,7 @@ export default function DocumentenPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userDisplayName, setUserDisplayName] = useState("");
   const [docs, setDocs] = useState<DocItem[]>([]);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -64,8 +137,7 @@ export default function DocumentenPage() {
         toast.error("Kon je documenten niet laden.");
         setDocs([
           {
-            title: "Europees aanrijdingsformulier (PDF)",
-            subtitle: "Leeg formulier om te downloaden en in te vullen",
+            title: "Europees aanrijdingsformulier",
             url: "/AANRIJDINGSFORMULIER.pdf",
           },
         ]);
@@ -75,17 +147,45 @@ export default function DocumentenPage() {
 
       const fromFleet = ((data as FleetAssistantContext[]) ?? [])
         .filter((r) => typeof r.document_type === "string" && r.document_type.trim())
-        .map((r) => ({
-          title: String(r.document_type),
-          subtitle: r.merk_model ? String(r.merk_model) : undefined,
-          url: String(r.document_url ?? ""),
-        }))
+        .map((r) => {
+          const rawType = String(r.document_type ?? "").trim();
+          const type = rawType.toUpperCase();
+
+          if (type === "GROENE_KAART") {
+            return {
+              title: "Groene kaart",
+              subtitle: r.merk_model ? String(r.merk_model) : undefined,
+              url: "/documenten/preview?src=%2Fapi%2Finsurance%2Fgreen-card&title=Groene%20kaart",
+            };
+          }
+
+          if (type === "VERZEKERINGSATTEST") {
+            return {
+              title: "Verzekeringsattest",
+              subtitle: r.merk_model ? String(r.merk_model) : undefined,
+              url: "/api/insurance/attest",
+            };
+          }
+
+          if (type === "OFFERTE") {
+            return {
+              title: "Offerte",
+              subtitle: r.merk_model ? String(r.merk_model) : undefined,
+              url: "/documenten/preview?src=%2Fapi%2Fvehicle-documents%2FOFFERTE&title=Offerte",
+            };
+          }
+
+          return {
+            title: rawType,
+            subtitle: r.merk_model ? String(r.merk_model) : undefined,
+            url: String(r.document_url ?? ""),
+          };
+        })
         .filter((d) => d.url.trim().length > 0);
 
       setDocs([
         {
-          title: "Europees aanrijdingsformulier (PDF)",
-          subtitle: "Leeg formulier om te downloaden en in te vullen",
+          title: "Europees aanrijdingsformulier",
           url: "/AANRIJDINGSFORMULIER.pdf",
         },
         ...fromFleet,
@@ -99,75 +199,93 @@ export default function DocumentenPage() {
   }, [router, supabase]);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#F7F9FC]">
+    <div className="app-canvas flex min-h-[100dvh] flex-col">
       <AppHeader userEmail={userEmail} userDisplayName={userDisplayName} />
 
       {loading ? (
         <LoadingState context="documenten" />
       ) : (
-        <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-6 lg:px-8">
-          <div className="mb-6">
-            <div className="flex items-center gap-2">
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F4FB] text-[#2799D7]"
+        <main className="app-page-shell">
+          <header className="touch-manipulation pt-1">
+            <div className="flex items-start gap-3">
+              <PiFolderUserBold
+                className="mt-0.5 size-7 shrink-0 text-primary sm:size-8"
                 aria-hidden
-              >
-                <PiFolderUserBold className="size-5" aria-hidden />
-              </span>
-              <h2 className="font-heading text-xl font-semibold text-[#163247]">
-                Mijn documenten
-              </h2>
+              />
+              <div className="min-w-0 flex-1">
+                <h1 className="font-heading text-[1.375rem] font-bold leading-[1.15] tracking-tight text-foreground sm:text-[1.625rem]">
+                  Mijn documenten
+                </h1>
+              </div>
             </div>
-            <p className="mt-2 max-w-prose text-[15px] leading-relaxed text-[#5F7382]">
-              Hier vind je al je autopapieren en documenten terug.
-            </p>
-          </div>
+          </header>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3">
-            {docs.map((d) => (
-              <a
-                key={`${d.title}-${d.url}`}
-                href={d.url}
-                target={d.url.startsWith("/") ? "_self" : "_blank"}
-                rel={d.url.startsWith("/") ? undefined : "noopener noreferrer"}
-                className="flex items-start gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-[0_2px_12px_rgba(39,153,215,0.06)] transition-colors hover:bg-[#F7F9FC]"
-              >
-                <div
-                  className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F4FB]/90 text-[#2799D7] ring-1 ring-[#2799D7]/10"
-                  aria-hidden
-                >
-                  {d.url === "/AANRIJDINGSFORMULIER.pdf" ? (
-                    <span className="relative flex items-center justify-center">
-                      <SiEuropeanunion className="size-6 opacity-35" aria-hidden />
-                      <span className="absolute inset-0 flex items-center justify-center font-heading text-[10px] font-extrabold tracking-wide text-[#2799D7]">
-                        EU
-                      </span>
-                    </span>
-                  ) : d.title.toLowerCase().includes("offerte") ? (
-                    <IoDocumentAttachOutline className="size-6" aria-hidden />
-                  ) : (
-                    <FileText className="size-6" strokeWidth={1.75} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-heading text-[15px] font-semibold text-[#163247]">
-                    {d.title}
-                  </p>
-                  {d.subtitle ? (
-                    <p className="mt-0.5 text-[13px] leading-snug text-[#5F7382]">
-                      {d.subtitle}
-                    </p>
-                  ) : null}
-                </div>
-                <ExternalLink
-                  className="mt-1 size-4 shrink-0 text-[#2799D7]/50"
-                  strokeWidth={2}
-                  aria-hidden
+          <section aria-labelledby="documenten-list-heading" className="mt-8 sm:mt-10">
+            <h2
+              id="documenten-list-heading"
+              className="px-1 pb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              Documenten
+              <span className="ml-1.5 tabular-nums text-muted-foreground/80">
+                ({docs.length})
+              </span>
+            </h2>
+
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <div className="relative w-full sm:max-w-[420px]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Zoek in documenten…"
+                  className="pl-8"
+                  aria-label="Zoek documenten"
                 />
-              </a>
-            ))}
-          </div>
-        </div>
+              </div>
+            </div>
+
+            <div className="app-ios-group">
+              {(query.trim()
+                ? docs.filter((d) => {
+                    const q = query.trim().toLowerCase();
+                    return `${d.title} ${d.subtitle ?? ""}`.toLowerCase().includes(q);
+                  })
+                : docs
+              ).map((d) => (
+                <a
+                  key={`${d.title}-${d.url}`}
+                  href={d.url}
+                  target={d.url.startsWith("/") ? "_self" : "_blank"}
+                  rel={d.url.startsWith("/") ? undefined : "noopener noreferrer"}
+                  className={cn(
+                    iosRowClass,
+                    "text-foreground transition-colors hover:bg-muted/30",
+                  )}
+                >
+                  <DocRowIcon doc={d} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[16px] font-semibold leading-snug">
+                      {displayDocTitle(d.title)}
+                    </p>
+                    {d.subtitle ? (
+                      <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+                        {d.subtitle}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DocKindBadge kind={docKindFromUrl(d.url)} />
+                    <ChevronRight
+                      className="size-5 shrink-0 text-muted-foreground/45"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        </main>
       )}
     </div>
   );

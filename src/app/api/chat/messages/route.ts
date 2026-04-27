@@ -26,9 +26,20 @@ export async function GET() {
       })),
     });
   } catch (e) {
-    console.error("GET /api/chat/messages:", e);
+    const errText =
+      e instanceof Error
+        ? `${e.name}: ${e.message}\n${e.stack ?? ""}`.trim()
+        : (() => {
+            try {
+              return JSON.stringify(e);
+            } catch {
+              return String(e);
+            }
+          })();
+    console.error(`GET /api/chat/messages:\n${errText}`);
+    const isDev = process.env.NODE_ENV !== "production";
     return NextResponse.json(
-      { error: "Kon berichten niet laden." },
+      { error: "Kon berichten niet laden.", ...(isDev ? { debug: errText } : {}) },
       { status: 500 },
     );
   }

@@ -2,6 +2,77 @@ import type { ChatResponse } from "@/types/chat";
 import type { FleetAssistantContext } from "@/types/database";
 import { eur, datum } from "./utils";
 
+export function formatInsuranceCertificateResponse(
+  ctx: FleetAssistantContext | null,
+): ChatResponse {
+  const hasVehicle = Boolean(
+    (ctx?.vin && String(ctx.vin).trim()) ||
+      (ctx?.merk_model && String(ctx.merk_model).trim()) ||
+      (ctx?.nummerplaat && String(ctx.nummerplaat).trim()),
+  );
+  if (!hasVehicle) {
+    return {
+      intent: "insurance_certificate",
+      title: "Verzekeringsattest",
+      message:
+        "Ik kon geen **actief leasevoertuig** vinden dat aan jouw profiel gekoppeld is.\n\n" +
+        "Je vraag wordt automatisch doorgestuurd naar je **fleet manager** — je krijgt zo snel mogelijk een update.",
+      suggestions: ["Mijn wagen", "Mijn contract", "Mijn documenten"],
+    };
+  }
+
+  const fields = [
+    ctx?.merk_model ? { label: "Wagen", value: String(ctx.merk_model) } : null,
+    ctx?.nummerplaat
+      ? { label: "Nummerplaat / Kenteken", value: String(ctx.nummerplaat) }
+      : null,
+    ctx?.vin ? { label: "Chassisnummer (VIN)", value: String(ctx.vin) } : null,
+    { label: "Eigenaar", value: "AllPhi" },
+    ctx?.insurance_company
+      ? { label: "Verzekeringsmaatschappij", value: String(ctx.insurance_company) }
+      : { label: "Verzekeringsmaatschappij", value: "—" },
+    ctx?.policy_number
+      ? { label: "Polisnummer", value: String(ctx.policy_number) }
+      : { label: "Polisnummer", value: "—" },
+    ctx?.green_card_number
+      ? { label: "Nr. groene kaart", value: String(ctx.green_card_number) }
+      : { label: "Nr. groene kaart", value: "—" },
+    ctx?.green_card_valid_from
+      ? {
+          label: "Geldig van",
+          value: datum(String(ctx.green_card_valid_from)),
+        }
+      : null,
+    ctx?.green_card_valid_to
+      ? {
+          label: "Geldig tot",
+          value: datum(String(ctx.green_card_valid_to)),
+        }
+      : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  const hintParts = [
+    ctx?.merk_model ? String(ctx.merk_model) : null,
+    ctx?.nummerplaat ? `(${ctx.nummerplaat})` : null,
+  ].filter(Boolean);
+
+  return {
+    intent: "insurance_certificate",
+    title: "Verzekeringsattest",
+    message:
+      `Ik heb je gegevens gevonden${hintParts.length ? ` voor **${hintParts.join(" ")}**` : ""}.\n\n` +
+      "Het attest bevat:\n" +
+      "- **BA-verzekering**\n" +
+      "- **Omnium** (indien van toepassing)\n" +
+      "- Kenteken, chassisnummer en eigenaar AllPhi\n" +
+      "- Geldigheidsdatum en polisnummer\n\n" +
+      "Je kan hieronder meteen een **verzekeringsattest (PDF)** downloaden.",
+    cards: [{ type: "insight", title: "Gegevens voor attest", fields }],
+    cta: { label: "Download verzekeringsattest (PDF)", href: "/api/insurance/attest" },
+    suggestions: ["Mijn wagen", "Mijn contract", "Mijn documenten"],
+  };
+}
+
 export function formatVehicleResponse(
   ctx: FleetAssistantContext | null
 ): ChatResponse {

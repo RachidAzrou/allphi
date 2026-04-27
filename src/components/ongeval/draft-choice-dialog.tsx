@@ -116,24 +116,24 @@ export function DraftChoiceDialog({
           {items.map((item) => (
             <li
               key={item.id}
-              className="group flex items-center gap-2 rounded-xl border border-black/[0.06] bg-white p-3 shadow-[0_1px_0.5px_rgba(11,20,26,0.08)] transition-colors hover:border-[#2799D7]/40"
+              className="app-card app-card-hover group flex items-center gap-2 rounded-2xl p-3"
             >
               <button
                 type="button"
                 onClick={() => onContinue(item.id)}
                 className="flex flex-1 items-start gap-3 text-left"
               >
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#E8F4FB] text-[#2799D7]">
+                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary ring-1 ring-primary/10">
                   <FileText className="size-4" strokeWidth={2} aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-[#163247]">
+                  <span className="block truncate text-[14px] font-semibold text-foreground">
                     {item.title}
                   </span>
-                  <span className="mt-0.5 block truncate text-[12px] text-[#5F7382]">
+                  <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
                     {item.subtitle}
                   </span>
-                  <span className="mt-0.5 block text-[11px] text-[#8696A0]">
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground/80">
                     {item.updated}
                   </span>
                 </span>
@@ -143,7 +143,7 @@ export function DraftChoiceDialog({
                   type="button"
                   onClick={() => onDelete(item.id)}
                   aria-label="Concept verwijderen"
-                  className="shrink-0 rounded-lg p-1.5 text-[#8696A0] transition-colors hover:bg-red-50 hover:text-red-600"
+                  className="shrink-0 rounded-xl p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="size-4" strokeWidth={2} aria-hidden />
                 </button>
@@ -155,7 +155,7 @@ export function DraftChoiceDialog({
         <button
           type="button"
           onClick={onStartNew}
-          className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#2799D7] px-4 py-2.5 text-center text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e7bb0] active:bg-[#1a6a9a]"
+          className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary/80 px-4 py-2.5 text-center text-[15px] font-semibold text-primary-foreground shadow-[0_14px_30px_rgba(39,153,215,0.18)] transition-all hover:from-primary hover:to-primary active:scale-[0.99]"
         >
           <FilePlus2 className="size-4" strokeWidth={2} aria-hidden />
           Nieuwe aangifte starten

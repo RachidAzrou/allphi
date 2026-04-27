@@ -20,7 +20,7 @@ import {
   getSituationDetailLabel,
   getManeuverLabel,
 } from "@/lib/ongeval/situations";
-import type { AccidentReportState, PartyDetails } from "@/types/ongeval";
+import type { AccidentReportState, DamagePhoto, PartyDetails } from "@/types/ongeval";
 
 /* ---------------------------------------------------------- helpers */
 
@@ -33,10 +33,39 @@ function safe(v: string | null | undefined, fallback = ""): string {
   return (v ?? "").trim() || fallback;
 }
 
+/**
+ * `pdf-lib` StandardFonts (Helvetica/Times/Courier) only support WinAnsi.
+ * Replace/strip common Unicode punctuation so PDF generation can't crash.
+ */
+function winAnsiSafe(input: string): string {
+  if (!input) return "";
+  const s = input
+    // common punctuation used in UI copy/content
+    .replaceAll("→", "->")
+    .replaceAll("•", "-")
+    .replaceAll("—", "-")
+    .replaceAll("–", "-")
+    .replaceAll("…", "...")
+    .replaceAll("’", "'")
+    .replaceAll("‘", "'")
+    .replaceAll("“", '"')
+    .replaceAll("”", '"')
+    .replaceAll("\u00A0", " "); // nbsp
+
+  // Last-resort: replace any remaining non WinAnsi (beyond Latin-1) chars.
+  let out = "";
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0;
+    out += cp <= 0xff ? ch : "?";
+  }
+  return out;
+}
+
 function truncate(s: string, max: number): string {
   if (!s) return s;
   if (s.length <= max) return s;
-  return s.slice(0, max - 1).trimEnd() + "…";
+  // StandardFonts.* in pdf-lib are WinAnsi encoded; avoid Unicode ellipsis.
+  return s.slice(0, Math.max(0, max - 3)).trimEnd() + "...";
 }
 
 function addressLine(a: {
@@ -87,7 +116,7 @@ function drawText(
   opts: DrawOptions & { font: PDFFont },
 ) {
   if (!text) return;
-  page.drawText(text, {
+  page.drawText(winAnsiSafe(text), {
     x,
     y,
     size: opts.size ?? 9,
@@ -118,6 +147,65 @@ async function embedSignaturePng(
     page.drawImage(png, { x, y, width, height });
   } catch (e) {
     console.warn("[pdf] signature embed failed", e);
+  }
+}
+
+/* ---------------------------------------------------------- damage photos */
+
+async function embedDamagePhotoPage(
+  pdfDoc: PDFDocument,
+  bytes: Uint8Array,
+  mime: string,
+  title: string,
+) {
+  const page = pdfDoc.addPage();
+  const { width: pw, height: ph } = page.getSize();
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  page.drawRectangle({
+    x: 0,
+    y: ph - 54,
+    width: pw,
+    height: 54,
+    color: rgb(0.91, 0.95, 0.98),
+  });
+  drawText(page, "Bijlage — Foto", 36, ph - 26, { font: bold, size: 14 });
+  drawText(page, truncate(title, 120), 36, ph - 44, {
+    font,
+    size: 10,
+    color: rgb(0.4, 0.47, 0.54),
+  });
+
+  const margin = 36;
+  const top = ph - 70;
+  const maxW = pw - margin * 2;
+  const maxH = top - margin;
+
+  const img =
+    mime === "image/png" ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+
+  const ratio = Math.min(maxW / img.width, maxH / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  const x = margin + (maxW - w) / 2;
+  const y = margin + (maxH - h) / 2;
+  page.drawImage(img, { x, y, width: w, height: h });
+}
+
+async function appendDamagePhotosToPdf(
+  pdfDoc: PDFDocument,
+  photos: DamagePhoto[],
+  download: (p: DamagePhoto) => Promise<{ bytes: Uint8Array; mime: string; name: string }>,
+) {
+  for (const p of photos) {
+    try {
+      const { bytes, mime, name } = await download(p);
+      await embedDamagePhotoPage(pdfDoc, bytes, mime, name);
+    } catch (e) {
+      console.warn("[pdf] damage photo append failed", e);
+    }
   }
 }
 
@@ -949,6 +1037,8 @@ async function renderCoverSheet(
   coverPageCount += 1;
   let y = 800;
 
+  const incidentKind = state.incidentKind ?? "accident_with_other_party";
+
   /** Tekent de blauwe header bovenaan een coversheetpagina. */
   function drawHeader(p: PDFPage, isFirst: boolean) {
     p.drawRectangle({
@@ -958,14 +1048,26 @@ async function renderCoverSheet(
       height: 52,
       color: rgb(0.153, 0.6, 0.84),
     });
-    drawText(p, "EUROPEES AANRIJDINGSFORMULIER", margin, 820, {
+    drawText(
+      p,
+      incidentKind === "damage_only"
+        ? "SCHADEMELDING"
+        : "EUROPEES AANRIJDINGSFORMULIER",
+      margin,
+      820,
+      {
       font: bold,
       size: 14,
       color: rgb(1, 1, 1),
-    });
+      },
+    );
     drawText(
       p,
-      isFirst ? "Samenvatting van de aangifte" : "Samenvatting (vervolg)",
+      isFirst
+        ? incidentKind === "damage_only"
+          ? "Samenvatting van de melding"
+          : "Samenvatting van de aangifte"
+        : "Samenvatting (vervolg)",
       margin,
       802,
       { font, size: 10, color: rgb(1, 1, 1) },
@@ -1018,20 +1120,126 @@ async function renderCoverSheet(
     y -= 20;
   };
 
-  /* 1. Plaats & tijd */
-  writeHeading("1. Plaats en tijd");
-  writeRow("Datum", formatDateForDisplay(state.location.datum));
-  writeRow("Uur", formatTimeForDisplay(state.location.tijd));
-  writeRow("Adres", addressLine(state.location));
-  writeRow("Land", safe(state.location.land));
+  /* 0. Belangrijke procedure */
+  writeHeading("0. Belangrijk");
+  writeRow("48-uurs regel", "Meld elk incident binnen 48 uur.");
+  if (incidentKind === "accident_with_other_party") {
+    writeRow("Veiligheid", "Bij gewonden: bel 112. Maak de situatie veilig.");
+    if (state.policeReasons.length > 0) {
+      writeRow(
+        "Politie",
+        "Politie gecontacteerd (PV-nummer indien beschikbaar hieronder).",
+      );
+    } else {
+      writeRow("Politie", "Niet verplicht tenzij weigering/vluchtmisdrijf/onder invloed.");
+    }
+  }
 
-  /* 2–4. Gewonden / schade */
-  writeHeading("2-4. Gewonden en schade");
-  writeRow("Gewonden", yn(state.gewonden) || "Niet opgegeven");
-  writeRow(
-    "Andere materiële schade",
-    yn(state.materieleSchadeAnders) || "Niet opgegeven",
-  );
+  /* 1. Plaats & tijd (optioneel voor schade-track) */
+  writeHeading("1. Plaats en tijd");
+  writeRow("Datum", formatDateForDisplay(state.location.datum) || "—");
+  writeRow("Uur", formatTimeForDisplay(state.location.tijd) || "—");
+  writeRow("Adres", addressLine(state.location) || "—");
+  writeRow("Land", safe(state.location.land) || "—");
+
+  if (incidentKind === "accident_with_other_party") {
+    /* 2–4. Gewonden / schade */
+    writeHeading("2-4. Gewonden en schade");
+    writeRow("Gewonden", yn(state.gewonden) || "Niet opgegeven");
+    writeRow(
+      "Andere materiële schade",
+      yn(state.materieleSchadeAnders) || "Niet opgegeven",
+    );
+  }
+
+  if (state.policeReportNumber?.trim()) {
+    writeHeading("PV-nummer");
+    writeRow("PV-nummer", state.policeReportNumber.trim());
+  }
+
+  if (incidentKind === "damage_only") {
+    writeHeading("Type schade");
+    const dmg =
+      state.damageType === "glass"
+        ? "Glasbreuk"
+        : state.damageType === "theft_vandalism"
+          ? "Diefstal / inbraak / vandalisme"
+          : state.damageType === "single_vehicle"
+            ? "Eenzijdige schade"
+            : "—";
+    writeRow("Type", dmg);
+    if (state.damageType === "glass") {
+      writeRow("Hersteller", safe(state.glassRepairProvider) || "—");
+    }
+    if (state.photosTaken !== null) {
+      writeRow("Foto's", state.photosTaken ? "Ja" : "Nee");
+    }
+    if (state.claimNotes?.trim()) {
+      writeRow("Notitie", state.claimNotes.trim());
+    }
+
+    writeHeading("Eigen risico (franchise)");
+    const baseFranchise = 600;
+    const pct =
+      state.employeeLevel === 1
+        ? 0.2
+        : state.employeeLevel === 2
+          ? 0.5
+          : state.employeeLevel === 3
+            ? 1
+            : null;
+    writeRow(
+      "Niveau",
+      state.employeeLevel ? `Niveau ${state.employeeLevel}` : "—",
+    );
+    const est = state.repairCostEstimateEur;
+    if (typeof est === "number" && Number.isFinite(est) && est > 0) {
+      writeRow("Schatting herstelkost", `€${Math.round(est)}`);
+    }
+    const effectiveBase =
+      typeof est === "number" && Number.isFinite(est) && est > 0 && est < baseFranchise
+        ? est
+        : baseFranchise;
+    if (pct !== null) {
+      writeRow("Bijdrage (indicatief)", `€${Math.round(effectiveBase * pct)}`);
+    }
+
+    writeHeading("Mobiliteit");
+    writeRow(
+      "Wagen mobiel",
+      state.vehicleMobile === null ? "—" : state.vehicleMobile ? "Ja" : "Nee",
+    );
+    if (state.vehicleMobile === false) {
+      writeRow("Takel", "Bel de geautoriseerde takeldienst (zie boorddocumenten).");
+    }
+
+    writeHeading("Escalatie");
+    const escalationReasons: string[] = [];
+    if (state.gewonden === true) escalationReasons.push("Gewonden");
+    if (state.escalation.uncertainLiability)
+      escalationReasons.push("Onzekere aansprakelijkheid");
+    if (state.escalation.heavyOrComplexDamage)
+      escalationReasons.push("Zware/complexe schade");
+    if (state.escalation.grossNegligenceSuspected)
+      escalationReasons.push("Vermoeden grove nalatigheid");
+    if (state.escalation.unreportedDamageAtReturn)
+      escalationReasons.push("Schade bij inname niet vooraf gemeld");
+    writeRow(
+      "Status",
+      escalationReasons.length > 0 ? escalationReasons.join(" • ") : "Geen indicatie",
+    );
+
+    // Voetnoot
+    drawText(
+      page,
+      "Deze samenvatting is automatisch gegenereerd vanuit de AllPhi-wizard.",
+      margin,
+      40,
+      { font, size: 8, color: rgb(0.4, 0.47, 0.54), maxWidth: contentWidth },
+    );
+
+    return { page, pageCount: coverPageCount };
+  }
 
   /* 5. Getuigen */
   writeHeading("5. Getuigen");
@@ -1408,7 +1616,25 @@ async function loadPayload(
 
 export async function buildAccidentPdfBytes(
   state: AccidentReportState,
+  opts?: {
+    downloadDamagePhoto?: (
+      p: DamagePhoto,
+    ) => Promise<{ bytes: Uint8Array; mime: string; name: string }>;
+  },
 ): Promise<Uint8Array> {
+  const incidentKind = state.incidentKind ?? "accident_with_other_party";
+
+  if (incidentKind === "damage_only") {
+    const pdfDoc = await PDFDocument.create();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    await renderCoverSheet(pdfDoc, font, bold, state);
+    if (opts?.downloadDamagePhoto && state.damagePhotos.length > 0) {
+      await appendDamagePhotosToPdf(pdfDoc, state.damagePhotos, opts.downloadDamagePhoto);
+    }
+    return await pdfDoc.save();
+  }
+
   const templatePath = path.join(
     process.cwd(),
     "public",
@@ -1620,6 +1846,9 @@ export async function buildAccidentPdfBytes(
     COL_B.signature.h,
   );
 
+  if (opts?.downloadDamagePhoto && state.damagePhotos.length > 0) {
+    await appendDamagePhotosToPdf(pdfDoc, state.damagePhotos, opts.downloadDamagePhoto);
+  }
   return await pdfDoc.save();
 }
 
@@ -1641,7 +1870,20 @@ export async function GET(
     }
 
     const state = mergePayloadIntoState(payload);
-    const pdfBytes = await buildAccidentPdfBytes(state);
+    const supabase = await createClient();
+    const pdfBytes = await buildAccidentPdfBytes(state, {
+      downloadDamagePhoto: async (p) => {
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from(p.bucket)
+          .download(p.path);
+        if (dlErr || !blob) throw new Error(dlErr?.message ?? "download_failed");
+        return {
+          bytes: new Uint8Array(await blob.arrayBuffer()),
+          mime: p.mime || "image/jpeg",
+          name: p.name || "foto",
+        };
+      },
+    });
 
     return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,

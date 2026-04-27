@@ -1,7 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bot as LuBot, Car, FileText, Zap, ClipboardList } from "lucide-react";
+import {
+  Bot as LuBot,
+  Car,
+  FileText,
+  Zap,
+  ClipboardList,
+  ClipboardCheck,
+} from "lucide-react";
 
 interface WelcomeCardProps {
   voornaam?: string;
@@ -13,6 +20,12 @@ const actions = [
   { label: "Mijn documenten", message: "Wat zijn mijn documenten?", icon: FileText },
   { label: "Mijn laadkosten", message: "Hoeveel heb ik geladen?", icon: Zap },
   { label: "Contractinfo", message: "Wat is mijn contract?", icon: ClipboardList },
+  { label: "Bandenwissel", message: "Ik wil een bandenwissel doen", icon: Car },
+  {
+    label: "Leasewagen inleveren",
+    message: "Ik wil mijn leasewagen inleveren",
+    icon: ClipboardCheck,
+  },
 ];
 
 export function WelcomeCard({ voornaam, onAction }: WelcomeCardProps) {
@@ -23,17 +36,19 @@ export function WelcomeCard({ voornaam, onAction }: WelcomeCardProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="w-full px-safe pt-4 pb-2"
+      className="w-full px-safe pt-5 pb-2"
     >
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2799D7] shadow-sm">
-          <LuBot className="h-5 w-5 text-white" strokeWidth={1.75} aria-hidden />
+        <div className="stitch-gradient-fill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-white/25">
+          <LuBot className="h-5 w-5 text-primary-foreground" strokeWidth={1.75} aria-hidden />
         </div>
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="rounded-[8px] rounded-bl-[3px] bg-white px-3 py-2 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
-            <p className="break-words text-[15px] leading-[1.45] text-[#163247] [overflow-wrap:anywhere]">
-              <span className="font-semibold">{greeting}</span> Waar kan ik je
-              mee helpen? Kies iets of stel je vraag hieronder.
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="font-heading text-lg font-semibold leading-snug tracking-tight text-foreground">
+              {greeting}
+            </p>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
+              Waar kan ik je mee helpen? Kies een onderwerp of typ je vraag hieronder.
             </p>
           </div>
 
@@ -45,18 +60,15 @@ export function WelcomeCard({ voornaam, onAction }: WelcomeCardProps) {
                   key={action.label}
                   type="button"
                   onClick={() => onAction(action.message)}
-                  className="group flex w-full touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-[#00000014] bg-white px-1.5 py-3 text-center shadow-[0_1px_0.5px_rgba(11,20,26,0.1)] transition-[transform,background-color,box-shadow] active:scale-[0.98] active:bg-[#E8F4FB] sm:py-3.5"
+                  className="flex min-h-14 touch-manipulation flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-2 py-3 text-center shadow-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
                 >
                   <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2799D7]/14 transition-colors group-active:bg-[#2799D7]/22 sm:h-11 sm:w-11"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary"
                     aria-hidden
                   >
-                    <Icon
-                      className="h-6 w-6 text-[#2799D7] sm:h-7 sm:w-7"
-                      strokeWidth={1.5}
-                    />
+                    <Icon className="h-5 w-5" strokeWidth={1.75} />
                   </span>
-                  <span className="w-full px-0.5 text-center text-[12px] font-semibold leading-tight tracking-tight text-[#2799D7] sm:text-[13px]">
+                  <span className="w-full px-0.5 text-center text-[12px] font-medium leading-tight text-foreground">
                     {action.label}
                   </span>
                 </button>

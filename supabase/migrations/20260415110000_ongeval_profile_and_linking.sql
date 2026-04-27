@@ -6,7 +6,7 @@
 -- ──────────────────────────────────────────────
 
 create table if not exists public.medewerker_profiel_extra (
-  medewerker_id uuid primary key references public.medewerkers (id) on delete cascade,
+  medewerker_id bigint primary key references public.medewerkers (id) on delete cascade,
   geboortedatum date,
   straat text,
   huisnummer text,
@@ -36,7 +36,7 @@ create trigger medewerker_profiel_extra_touch_updated
 
 -- Map authenticated user email → medewerker id (for RLS policies).
 create or replace function public.current_medewerker_id()
-returns uuid
+returns bigint
 language sql
 stable
 as $$
@@ -65,7 +65,7 @@ grant select, insert, update, delete
 -- ──────────────────────────────────────────────
 
 alter table public.ongeval_aangiften
-  add column if not exists medewerker_id uuid references public.medewerkers (id),
+  add column if not exists medewerker_id bigint references public.medewerkers (id),
   add column if not exists join_secret text,
   add column if not exists join_role text check (join_role in ('A', 'B')),
   add column if not exists pdf_path text,

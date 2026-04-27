@@ -216,7 +216,7 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
   return (
     <div
       className={cn(
-        "relative flex min-h-[220px] flex-1 flex-col rounded-2xl border border-[#2799D7]/18 bg-[#FAFCFE] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
+        "relative flex min-h-[220px] flex-1 flex-col rounded-2xl border border-primary/20 bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
         className,
       )}
     >
@@ -232,7 +232,7 @@ export function SignaturePad({ value, onChange, className }: SignaturePadProps) 
         type="button"
         onClick={undoLast}
         disabled={!hasContent}
-        className="absolute bottom-3 left-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/90 p-2 text-[#163247] shadow-md transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+        className="app-surface absolute bottom-3 left-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-2 text-foreground shadow-md ring-1 ring-border/70 transition-opacity hover:bg-card disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Laatste lijn ongedaan maken"
         title="Laatste lijn ongedaan maken"
       >

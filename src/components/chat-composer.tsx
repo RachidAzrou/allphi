@@ -85,17 +85,17 @@ export function ChatComposer({
     (value.trim().length > 0 || files.length > 0) && !disabled;
 
   return (
-    <div className="shrink-0 safe-bottom w-full min-w-0 border-t border-white/25 bg-white/65 backdrop-blur-lg supports-[backdrop-filter]:bg-white/55">
-      <div className="w-full max-w-none min-w-0 px-safe pt-2 pb-2">
+    <div className="shrink-0 border-t border-border bg-card safe-bottom">
+      <div className="w-full max-w-none min-w-0 px-safe py-3">
         {files.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {files.map((f, i) => (
               <span
                 key={`${f.name}-${i}-${f.lastModified}`}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#00000014] bg-white py-1 pl-2.5 pr-1 text-[13px] text-[#163247] shadow-[0_1px_0.5px_rgba(11,20,26,0.08)]"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1 pl-2.5 pr-1 text-[13px] text-foreground"
               >
                 <Paperclip
-                  className="h-3.5 w-3.5 shrink-0 text-[#2799D7]"
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                   strokeWidth={2}
                   aria-hidden
                 />
@@ -103,7 +103,7 @@ export function ChatComposer({
                 <button
                   type="button"
                   onClick={() => removeFile(i)}
-                  className="flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full text-[#5F7382] transition-colors hover:bg-[#E8F4FB] hover:text-[#163247]"
+                  className="flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                   aria-label={`Verwijder ${f.name}`}
                 >
                   <X className="h-4 w-4" strokeWidth={2} />
@@ -119,17 +119,15 @@ export function ChatComposer({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Bericht"
+            placeholder="Stel je vraag…"
             disabled={disabled}
             rows={1}
             enterKeyHint="send"
             autoComplete="off"
             autoCorrect="on"
-            className="min-h-[44px] max-h-[min(40dvh,120px)] flex-1 resize-none rounded-[24px] bg-white
-                       px-[14px] py-2.5 text-[15px] leading-snug                      text-[#163247] placeholder:text-[#8696A0]
-                       border border-[#00000014] shadow-[inset_0_1px_0_rgba(0,0,0,0.03)]
-                       focus:outline-none focus:border-[#2799D7]/50 focus:ring-[3px] focus:ring-[#2799D7]/18
-                       disabled:opacity-45 transition-[box-shadow,border-color] touch-manipulation"
+            className="min-h-[44px] max-h-[min(40dvh,140px)] flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-[16px] leading-snug text-foreground placeholder:text-muted-foreground shadow-sm
+                       focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+                       disabled:opacity-50 touch-manipulation"
           />
 
           <input
@@ -150,23 +148,22 @@ export function ChatComposer({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled || files.length >= MAX_CHAT_ATTACHMENTS}
-            className="mb-0.5 flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full border border-[#00000014] bg-white text-[#2799D7] shadow-[0_1px_0.5px_rgba(11,20,26,0.08)]
-                       hover:bg-[#E8F4FB] active:scale-[0.96]
-                       disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white
-                       transition-all duration-150"
+            className="mb-px flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-input bg-background text-muted-foreground shadow-sm
+                       hover:bg-muted hover:text-foreground active:scale-[0.98]
+                       disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-background
+                       transition-colors"
             aria-label="Bijlage toevoegen"
           >
-            <Paperclip className="h-5 w-5" strokeWidth={2.25} />
+            <Paperclip className="h-5 w-5" strokeWidth={2} />
           </button>
 
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!canSend}
-            className="mb-0.5 flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#2799D7] text-white shadow-sm
-                       hover:bg-[#1E7AB0] active:scale-[0.96]
-                       disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-[#2799D7]
-                       transition-all duration-150"
+            className="stitch-btn-primary mb-px flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg shadow-sm
+                       disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:filter-none
+                       transition-[filter,transform]"
             aria-label="Verstuur"
           >
             <ArrowUp className="h-5 w-5" strokeWidth={2.25} />

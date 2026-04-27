@@ -1,0 +1,22 @@
+import { requireFleetManagerAccess } from "@/lib/auth/require-fleet-manager";
+import { FleetManagerAangifteDetailClient } from "./detail-client";
+
+export default async function FleetManagerAangifteDetailPage() {
+  const auth = await requireFleetManagerAccess();
+  if (!auth.ok) {
+    return (
+      <div className="p-6">
+        <h1 className="text-lg font-semibold">{auth.title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{auth.message}</p>
+      </div>
+    );
+  }
+
+  return (
+    <FleetManagerAangifteDetailClient
+      userEmail={auth.userEmail}
+      userDisplayName={auth.userDisplayName}
+    />
+  );
+}
+
