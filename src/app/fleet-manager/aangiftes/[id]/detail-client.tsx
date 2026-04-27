@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, Paperclip } from "lucide-react";
+import { Copy, FileText, Paperclip } from "lucide-react";
 import { TbCarCrash, TbUser } from "react-icons/tb";
 import { AppHeader } from "@/components/app-header";
 import { LoadingState } from "@/components/loading-state";
@@ -118,6 +118,13 @@ function formatTimestamp(ts: string) {
   }
 }
 
+function shortId(id: string): string {
+  const s = (id ?? "").trim();
+  if (!s) return "—";
+  if (s.length <= 16) return s;
+  return `${s.slice(0, 8)}…${s.slice(-4)}`;
+}
+
 export function FleetManagerAangifteDetailClient(props: { userEmail: string; userDisplayName: string }) {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
@@ -127,6 +134,7 @@ export function FleetManagerAangifteDetailClient(props: { userEmail: string; use
   const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [tab, setTab] = useState<"medewerker" | "wagen" | "bijlagen">("medewerker");
   const [repairBusy, setRepairBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +180,7 @@ export function FleetManagerAangifteDetailClient(props: { userEmail: string; use
       : null;
 
   const dossierId = aangifte?.id ?? id;
+  const dossierIdShort = useMemo(() => shortId(dossierId), [dossierId]);
 
   const basics = useMemo(() => pickBasics(aangifte?.payload), [aangifte?.payload]);
 
@@ -201,6 +210,31 @@ export function FleetManagerAangifteDetailClient(props: { userEmail: string; use
     if (!aangifte) return false;
     return !medewerker || !vehicle;
   }, [aangifte, medewerker, vehicle]);
+
+  const copyDossierId = useCallback(async () => {
+    const v = (dossierId ?? "").trim();
+    if (!v) return;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(v);
+      } else if (typeof document !== "undefined") {
+        const el = document.createElement("textarea");
+        el.value = v;
+        el.setAttribute("readonly", "true");
+        el.style.position = "fixed";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        el.remove();
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      console.error("[fleet] copy dossier id failed", e);
+      setCopied(false);
+    }
+  }, [dossierId]);
 
   const repairLinks = useCallback(async () => {
     if (!id || repairBusy) return;
@@ -271,11 +305,29 @@ export function FleetManagerAangifteDetailClient(props: { userEmail: string; use
                   </span>
                   <div className="min-w-0">
                     <h1 className="font-heading truncate text-[1.25rem] font-bold leading-[1.15] tracking-tight text-foreground sm:text-[1.5rem]">
-                      Dossier {dossierId}
+                      Dossier {dossierIdShort}
                     </h1>
-                    <p className="truncate text-[12px] text-muted-foreground">
-                      {basics.stad || "—"} • {basics.datum || "—"} • {basics.nummerplaat || "—"}
-                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+                      <span className="truncate">
+                        {basics.stad || "—"} • {basics.datum || "—"} • {basics.nummerplaat || "—"}
+                      </span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="font-mono break-all text-muted-foreground/80">{dossierId}</span>
+                      <button
+                        type="button"
+                        onClick={() => void copyDossierId()}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                          copied
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+                            : "border-border bg-card text-muted-foreground hover:bg-muted/40",
+                        )}
+                        aria-label="Kopieer dossier ID"
+                      >
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        {copied ? "Gekopieerd" : "Kopieer"}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <p className="mt-2 text-sm leading-snug text-muted-foreground">

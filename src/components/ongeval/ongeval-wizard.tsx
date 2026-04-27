@@ -486,6 +486,58 @@ export function OngevalWizard({
   }, []);
 
   useEffect(() => {
+    // Guest mode (partij B zonder login) kan meestal geen Supabase Realtime updates
+    // ontvangen door RLS. Daarom poll’en we de guest endpoint en mergen we payload.
+    if (guestSecret) {
+      let cancelled = false;
+      const interval = window.setInterval(async () => {
+        if (cancelled) return;
+        if (Date.now() - localEditAtRef.current < 1200) return;
+        try {
+          const res = await fetch(
+            `/api/ongeval/${encodeURIComponent(reportId)}/guest?secret=${encodeURIComponent(guestSecret)}`,
+            { cache: "no-store" },
+          );
+          const json = (await res.json().catch(() => null)) as
+            | { payload?: unknown; party_b_joined_at?: string | null }
+            | null;
+          if (!res.ok || !json) return;
+
+          if (typeof json.party_b_joined_at === "string" || json.party_b_joined_at === null) {
+            setPartyBJoinedAt(json.party_b_joined_at ?? null);
+          }
+
+          const remotePayload = json.payload;
+          if (!remotePayload) return;
+
+          setState((prev) => {
+            const merged = mergePayloadIntoState(remotePayload);
+            merged.currentStepId = prev.currentStepId;
+            merged.navigationHistory = prev.navigationHistory;
+            merged.role = prev.role;
+            merged.dismissedBanners = prev.dismissedBanners;
+
+            const prevApproval = (prev as any)?.locationApproval?.status as string | undefined;
+            const nextApproval = (merged as any)?.locationApproval?.status as string | undefined;
+            if (prev.role === "B" && prevApproval === "idle" && nextApproval === "pending") {
+              toast.message("Partij A heeft plaats & tijd doorgestuurd.", {
+                description: "Open de stap om te bevestigen of te weigeren.",
+              });
+            }
+
+            if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+            return merged;
+          });
+        } catch {
+          // ignore polling errors (offline/temporary)
+        }
+      }, 2500);
+      return () => {
+        cancelled = true;
+        window.clearInterval(interval);
+      };
+    }
+
     const channel = supabase
       .channel(`ongeval_aangiften:${reportId}`)
       .on(
@@ -527,7 +579,7 @@ export function OngevalWizard({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [reportId, supabase]);
+  }, [guestSecret, reportId, supabase]);
 
   const ensureJoinQr = useCallback(
     async (mode: "existing" | "rotate" = "existing") => {

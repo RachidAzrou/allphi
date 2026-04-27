@@ -76,17 +76,19 @@ export function FleetManagerHomeClient(props: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [completedAangiftesCount, setCompletedAangiftesCount] = useState(0);
   const [chargingRows, setChargingRows] = useState<FleetChargingMonthlyOverview[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [escRes, chargeRes] = await Promise.all([
+      const [escRes, chargeRes, aangiftesRes] = await Promise.all([
         fetch("/api/fleet-manager/escalations", { credentials: "same-origin" }),
         fetch(`/api/fleet/charging/overview?from=${encodeURIComponent(currentMonthIso())}&limit=500`, {
           credentials: "same-origin",
         }),
+        fetch("/api/fleet-manager/aangiftes?status=completed", { credentials: "same-origin" }),
       ]);
 
       const escJson = (await escRes.json()) as { escalations?: Escalation[]; error?: string };
@@ -100,11 +102,20 @@ export function FleetManagerHomeClient(props: {
         setChargingRows(Array.isArray(chargeJson.rows) ? chargeJson.rows : []);
       }
 
+      const aangiftesJson = (await aangiftesRes.json()) as { aangiftes?: unknown[]; error?: string };
+      if (!aangiftesRes.ok) {
+        // Aangiftes is important but shouldn't break dashboard loading.
+        setCompletedAangiftesCount(0);
+      } else {
+        setCompletedAangiftesCount(Array.isArray(aangiftesJson.aangiftes) ? aangiftesJson.aangiftes.length : 0);
+      }
+
       setEscalations(Array.isArray(escJson.escalations) ? escJson.escalations : []);
     } catch (e) {
       console.error(e);
       setError("Kon dashboard niet laden.");
       setEscalations([]);
+      setCompletedAangiftesCount(0);
       setChargingRows([]);
     } finally {
       setLoading(false);
@@ -164,10 +175,13 @@ export function FleetManagerHomeClient(props: {
         recent,
         oldestOpenAge: oldestOpen ? formatAgeShort(oldestOpen.created_at) : null,
       },
+      aangiftes: {
+        completedCount: completedAangiftesCount,
+      },
       charging: { totaalKost, openKost, sessies, byLocation: chargingByLocation },
       charts: { escByStatus },
     };
-  }, [escalations, chargingRows]);
+  }, [escalations, chargingRows, completedAangiftesCount]);
 
   const cardClass =
     "app-card app-card-hover block rounded-2xl p-4 sm:p-5 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -334,12 +348,12 @@ export function FleetManagerHomeClient(props: {
               </p>
             </Link>
 
-            <Link href="/fleet-manager/escalations?tab=resolved" className={cardClass}>
+            <Link href="/fleet-manager/aangiftes" className={cardClass}>
               <p className="text-[13px] font-medium text-muted-foreground">Afgehandeld</p>
               <p className="mt-1 text-[22px] font-heading font-extrabold tracking-tight text-foreground">
-                {computed.esc.resolvedCount}
+                {computed.aangiftes.completedCount}
               </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">afgehandelde escalaties</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">afgewerkte aangiftes</p>
             </Link>
 
             <Link href="/fleet-manager/laadkosten" className={cardClass}>
