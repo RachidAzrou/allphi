@@ -347,6 +347,9 @@ export function getNextStepId(
     case "signature_a":
       return "signature_b";
     case "signature_b":
+      // Partij B should not see fleet-related steps (mobility/escalation).
+      // They can be a private driver with no fleet context.
+      if (state.role === "B") return "complete";
       return "vehicle_mobility";
     case "complete":
       return null;
@@ -398,8 +401,8 @@ export function validateStep(
     case "incident_kind":
       return state.incidentKind !== null;
     case "safety_police":
-      // Veiligheidsstap is informatief; we vragen enkel bevestiging dat men dit gezien heeft.
-      return state.vehicleParkedSafe !== null;
+      // Informative step: no explicit confirmation required.
+      return true;
     case "damage_type":
       return state.damageType !== null;
     case "damage_glass":

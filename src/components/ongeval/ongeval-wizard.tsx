@@ -15,6 +15,7 @@ import {
   Camera,
   Download,
   DoorOpen,
+  Eraser,
   FilePenLine,
   GitBranch,
   ListChecks,
@@ -22,6 +23,7 @@ import {
   Info,
   Languages,
   MapPin,
+  MousePointer2,
   ParkingCircle,
   Pencil,
   Plus,
@@ -33,6 +35,7 @@ import {
   Smartphone,
   SmartphoneNfc,
   Split,
+  Type,
   Truck,
   UserCircle,
   Users,
@@ -54,6 +57,7 @@ import { WizardFooterButton, WizardShell } from "@/components/ongeval/wizard-she
 import { ImpactDiagram } from "@/components/ongeval/impact-diagram";
 import { LocationPicker } from "@/components/ongeval/location-picker";
 import { ScanCaptureStep, ScanPdfPreview } from "@/components/ongeval/scan-flow";
+import type { SelectedElementInfo, SelectedElementUpdate } from "@/components/ongeval/signature-pad";
 import { SignaturePad } from "@/components/ongeval/signature-pad";
 import { STEP_BANNERS } from "@/components/ongeval/step-banners";
 import { isPlaceholderPlate, normalizeBelgianPlate } from "@/lib/formatters/plate";
@@ -73,7 +77,6 @@ import {
   getCategoryDescription,
   getCategoryLabel,
   getDetailLabel,
-  resolveLang,
   t,
   type OngevalLang,
 } from "@/lib/ongeval/i18n";
@@ -385,6 +388,11 @@ export function OngevalWizard({
       navigationHistory: [],
     };
   });
+  const langStorageKey = useMemo(() => {
+    const role = (state.role ?? "A").toLowerCase();
+    return `ongeval_lang:${reportId}:${role}`;
+  }, [reportId, state.role]);
+  const [uiLang, setUiLang] = useState<OngevalLang>("nl");
   const [exitOpen, setExitOpen] = useState(false);
   const [exitBusy, setExitBusy] = useState<"save" | "delete" | null>(null);
   const [saving, setSaving] = useState(false);
@@ -413,12 +421,115 @@ export function OngevalWizard({
   const [joinQrDataUrl, setJoinQrDataUrl] = useState<string | null>(null);
   const [refreshingJoinQr, setRefreshingJoinQr] = useState(false);
   const [partyBJoinedAt, setPartyBJoinedAt] = useState<string | null>(null);
+  const sanitizedPartyBRef = useRef(false);
+  const [sketchTool, setSketchTool] = useState<
+    "select" | "pen" | "eraser" | "car" | "bike" | "road" | "arrow" | "text"
+  >("pen");
+  const [sketchRotation, setSketchRotation] = useState(0);
+  const [sketchRotateToken, setSketchRotateToken] = useState(0);
+  const [selectedSketchEl, setSelectedSketchEl] = useState<SelectedElementInfo | null>(null);
+  const [sketchUpdateToken, setSketchUpdateToken] = useState(0);
+  const [sketchUpdate, setSketchUpdate] = useState<Partial<SelectedElementUpdate> | null>(null);
+  const [sketchClearToken, setSketchClearToken] = useState(0);
 
   const stepId = state.currentStepId;
-  const lang: OngevalLang = resolveLang(
-    state.role,
-    state.partyBLanguage as OngevalLang | null,
-  );
+  // UI language is per device (A/B) and must remain stable across the flow.
+  // We persist it to localStorage so refreshes keep the chosen language.
+  const lang: OngevalLang = uiLang;
+
+  useEffect(() => {
+    // Initial language: localStorage (per role) → partyBLanguage (if role B) → nl
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(langStorageKey);
+      if (stored === "nl" || stored === "fr" || stored === "en") {
+        setUiLang(stored);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (state.role === "B" && state.partyBLanguage) {
+      setUiLang(state.partyBLanguage);
+      return;
+    }
+    setUiLang("nl");
+    // Only when role/report changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [langStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(langStorageKey, uiLang);
+    } catch {
+      // ignore
+    }
+  }, [langStorageKey, uiLang]);
+
+  useEffect(() => {
+    // If B language is updated from remote payload, keep UI in sync (unless user already picked).
+    if (state.role !== "B") return;
+    if (!state.partyBLanguage) return;
+    setUiLang((cur) => (cur ? cur : state.partyBLanguage as OngevalLang));
+  }, [state.partyBLanguage, state.role]);
+
+  // Guardrail: older versions prefilled Party B insurance from fleet context.
+  // Party B can be unknown/private, so if B hasn't entered any personal/vehicle data
+  // but insurance fields are filled, wipe them once to avoid misleading greyed-out values.
+  useEffect(() => {
+    if (sanitizedPartyBRef.current) return;
+    if (state.role !== "B") return;
+
+    const b = state.partyB;
+    const hasAnyPartyBIdentity =
+      Boolean(b.bestuurder?.voornaam?.trim?.()) ||
+      Boolean(b.bestuurder?.naam?.trim?.()) ||
+      Boolean(b.bestuurder?.email?.trim?.()) ||
+      Boolean(b.voertuig?.nummerplaat?.trim?.()) ||
+      Boolean(b.voertuig?.merkModel?.trim?.()) ||
+      Boolean(b.verzekeringsnemer?.voornaam?.trim?.()) ||
+      Boolean(b.verzekeringsnemer?.naam?.trim?.());
+
+    const ins = b.verzekering;
+    const hasInsuranceFilled =
+      Boolean(ins.maatschappij?.trim?.()) ||
+      Boolean(ins.polisnummer?.trim?.()) ||
+      Boolean(ins.groeneKaartNr?.trim?.()) ||
+      Boolean(ins.geldigVan?.trim?.()) ||
+      Boolean(ins.geldigTot?.trim?.()) ||
+      Boolean((ins as any)?.agentschap?.trim?.()) ||
+      Boolean((ins as any)?.makelaar?.trim?.());
+
+    if (hasAnyPartyBIdentity) {
+      sanitizedPartyBRef.current = true;
+      return;
+    }
+
+    if (!hasInsuranceFilled) {
+      sanitizedPartyBRef.current = true;
+      return;
+    }
+
+    sanitizedPartyBRef.current = true;
+    setState((prev) => ({
+      ...prev,
+      partyB: {
+        ...prev.partyB,
+        verzekering: {
+          ...prev.partyB.verzekering,
+          maatschappij: "",
+          polisnummer: "",
+          groeneKaartNr: "",
+          geldigVan: "",
+          geldigTot: "",
+          ...(typeof (prev.partyB.verzekering as any)?.agentschap === "string" ? { agentschap: "" } : null),
+          ...(typeof (prev.partyB.verzekering as any)?.makelaar === "string" ? { makelaar: "" } : null),
+        } as any,
+      },
+    }));
+  }, [state.role, state.partyB]);
   const bannerKey = `banner_${stepId}`;
   // Vertaalde banner-tekst (val terug op NL indien key niet bestaat).
   const bannerKeyByStep: Partial<Record<OngevalStepId, string>> = {
@@ -809,6 +920,10 @@ export function OngevalWizard({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Fleet-context (medewerkers + v_fleet_assistant_context) is only relevant for partij A.
+      // Partij B can be a private driver / non-fleet context.
+      if (guestSecret) return;
+      if (state.role === "B") return;
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -1129,40 +1244,7 @@ export function OngevalWizard({
           };
         }
 
-        // Prefill ook voor partij B (als die flow gebruikt wordt).
-        if (insuranceCompany && !next.partyB.verzekering.maatschappij) {
-          next.partyB = {
-            ...next.partyB,
-            verzekering: { ...next.partyB.verzekering, maatschappij: insuranceCompany },
-          };
-        }
-        if (policyNumber && !next.partyB.verzekering.polisnummer) {
-          next.partyB = {
-            ...next.partyB,
-            verzekering: { ...next.partyB.verzekering, polisnummer: policyNumber },
-          };
-        }
-        const partyBGreenCardIsEmpty =
-          !next.partyB.verzekering.groeneKaartNr ||
-          next.partyB.verzekering.groeneKaartNr.trim().toUpperCase() === "UNKNOWN";
-        if (greenCardNumber && partyBGreenCardIsEmpty) {
-          next.partyB = {
-            ...next.partyB,
-            verzekering: { ...next.partyB.verzekering, groeneKaartNr: greenCardNumber },
-          };
-        }
-        if (greenCardValidFrom && !next.partyB.verzekering.geldigVan) {
-          next.partyB = {
-            ...next.partyB,
-            verzekering: { ...next.partyB.verzekering, geldigVan: greenCardValidFrom },
-          };
-        }
-        if (greenCardValidTo && !next.partyB.verzekering.geldigTot) {
-          next.partyB = {
-            ...next.partyB,
-            verzekering: { ...next.partyB.verzekering, geldigTot: greenCardValidTo },
-          };
-        }
+        // Never prefill Party B insurance from fleet context: Party B can be unknown/private.
 
         return next;
       });
@@ -1171,7 +1253,7 @@ export function OngevalWizard({
     return () => {
       cancelled = true;
     };
-  }, [supabase]);
+  }, [guestSecret, state.role, supabase]);
 
   function renderPartyBForm() {
     const p = state.partyB;
@@ -1183,10 +1265,21 @@ export function OngevalWizard({
           </p>
         </div>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="font-heading text-[15px] font-semibold text-foreground">
-            {t(lang, "party_b_form.section.policyholder")}
-          </h3>
+        <section className="app-ios-group flex flex-col gap-4 border border-border/70 bg-card/60 shadow-[0_14px_34px_rgba(24,28,32,0.06)]">
+          <div className="flex items-start gap-3 border-b border-border/70 bg-muted/50 px-4 py-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/90 text-primary ring-1 ring-primary/10">
+              <UserCircle className="size-5" strokeWidth={1.9} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-heading text-[15px] font-semibold leading-tight text-foreground">
+                {t(lang, "party_b_form.section.policyholder")}
+              </h3>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+                Persoons- en adresgegevens van de verzekeringsnemer.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 px-4 py-3">
           <div className="grid grid-cols-2 gap-2">
             <Field label={t(lang, "field.firstname")}>
               <Input
@@ -1321,30 +1414,31 @@ export function OngevalWizard({
               />
             </Field>
           </div>
+          </div>
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="font-heading text-[15px] font-semibold text-foreground">
-            {t(lang, "party_b_form.section.insurance")}
-          </h3>
+        <section className="app-ios-group flex flex-col gap-4 border border-border/70 bg-card/60 shadow-[0_14px_34px_rgba(24,28,32,0.06)]">
+          <div className="flex items-start gap-3 border-b border-border/70 bg-muted/50 px-4 py-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/90 text-primary ring-1 ring-primary/10">
+              <BadgeCheck className="size-5" strokeWidth={1.9} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-heading text-[15px] font-semibold leading-tight text-foreground">
+                {t(lang, "party_b_form.section.insurance")}
+              </h3>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+                Verzekeraar en polis van partij B.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 px-4 py-3">
           {(() => {
-            const lockedInsuranceCompany =
-              Boolean(prefillCtxRef.current.insuranceCompany) &&
-              p.verzekering.maatschappij.trim() ===
-                prefillCtxRef.current.insuranceCompany.trim();
-            const lockedPolicyNumber =
-              Boolean(prefillCtxRef.current.policyNumber) &&
-              p.verzekering.polisnummer.trim() === prefillCtxRef.current.policyNumber.trim();
-            const lockedGreenCardNumber =
-              Boolean(prefillCtxRef.current.greenCardNumber) &&
-              p.verzekering.groeneKaartNr.trim() === prefillCtxRef.current.greenCardNumber.trim();
-            const lockedGreenCardValidFrom =
-              Boolean(prefillCtxRef.current.greenCardValidFrom) &&
-              p.verzekering.geldigVan.trim() ===
-                prefillCtxRef.current.greenCardValidFrom.trim();
-            const lockedGreenCardValidTo =
-              Boolean(prefillCtxRef.current.greenCardValidTo) &&
-              p.verzekering.geldigTot.trim() === prefillCtxRef.current.greenCardValidTo.trim();
+            // Party B details should never be locked from fleet prefill.
+            const lockedInsuranceCompany = false;
+            const lockedPolicyNumber = false;
+            const lockedGreenCardNumber = false;
+            const lockedGreenCardValidFrom = false;
+            const lockedGreenCardValidTo = false;
 
             return (
               <>
@@ -1378,10 +1472,13 @@ export function OngevalWizard({
               }
             />
           </Field>
-          <section className="flex flex-col gap-3">
-            <h3 className="font-heading text-[15px] font-semibold text-foreground">
-              {t(lang, "insurance.extra_toggle")}
-            </h3>
+          <section className="mt-1 flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4">
+            <div className="flex items-center gap-2">
+              <Info className="size-4 text-primary" strokeWidth={2} aria-hidden />
+              <h4 className="font-heading text-[14px] font-semibold text-foreground">
+                {t(lang, "insurance.extra_toggle")}
+              </h4>
+            </div>
             <div className="flex flex-col gap-3">
               <Field label={t(lang, "insurance.green_card")} required>
                 <Input
@@ -1465,12 +1562,24 @@ export function OngevalWizard({
               </>
             );
           })()}
+          </div>
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="font-heading text-[15px] font-semibold text-foreground">
-            {t(lang, "party_b_form.section.vehicle")}
-          </h3>
+        <section className="app-ios-group flex flex-col gap-4 border border-border/70 bg-card/60 shadow-[0_14px_34px_rgba(24,28,32,0.06)]">
+          <div className="flex items-start gap-3 border-b border-border/70 bg-muted/50 px-4 py-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/90 text-primary ring-1 ring-primary/10">
+              <Car className="size-5" strokeWidth={1.9} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-heading text-[15px] font-semibold leading-tight text-foreground">
+                {t(lang, "party_b_form.section.vehicle")}
+              </h3>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+                Gegevens van het voertuig van partij B (en eventuele aanhangwagen).
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 px-4 py-3">
           {(() => {
             const lockedVehicleMakeModel =
               Boolean(prefillCtxRef.current.vehicleMakeModel) &&
@@ -1612,12 +1721,24 @@ export function OngevalWizard({
               </div>
             ) : null}
           </div>
+          </div>
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h3 className="font-heading text-[15px] font-semibold text-foreground">
-            {t(lang, "party_b_form.section.driver")}
-          </h3>
+        <section className="app-ios-group flex flex-col gap-4 border border-border/70 bg-card/60 shadow-[0_14px_34px_rgba(24,28,32,0.06)]">
+          <div className="flex items-start gap-3 border-b border-border/70 bg-muted/50 px-4 py-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary/90 text-primary ring-1 ring-primary/10">
+              <UserCircle className="size-5" strokeWidth={1.9} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-heading text-[15px] font-semibold leading-tight text-foreground">
+                {t(lang, "party_b_form.section.driver")}
+              </h3>
+              <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">
+                Bestuurdergegevens van partij B (kan dezelfde persoon zijn als de verzekeringsnemer).
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 px-4 py-3">
           <div className="grid grid-cols-2 gap-2">
             <Field label={t(lang, "field.firstname")}>
               <Input
@@ -1811,6 +1932,7 @@ export function OngevalWizard({
               }
             />
           </Field>
+          </div>
         </section>
       </div>
     );
@@ -1877,23 +1999,8 @@ export function OngevalWizard({
                   </p>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant={state.vehicleParkedSafe === true ? "default" : "outline"}
-                  className="min-h-11 justify-center"
-                  onClick={() => updateState({ vehicleParkedSafe: true })}
-                >
-                  Wagen veilig / ok
-                </Button>
-                <Button
-                  type="button"
-                  variant={state.vehicleParkedSafe === false ? "default" : "outline"}
-                  className="min-h-11 justify-center"
-                  onClick={() => updateState({ vehicleParkedSafe: false })}
-                >
-                  Niet zeker / kan niet
-                </Button>
+              <div className="mt-4 rounded-xl border border-border bg-muted/20 px-3.5 py-3 text-[13px] leading-relaxed text-muted-foreground">
+                Zorg eerst voor veiligheid. Als er gewonden zijn, bel 112. Verplaats de wagen enkel als dat veilig kan.
               </div>
             </section>
 
@@ -1911,56 +2018,25 @@ export function OngevalWizard({
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-2">
-                <Button
-                  type="button"
-                  variant={hasReason("refused_to_sign") ? "default" : "outline"}
-                  className="min-h-11 justify-start"
-                  onClick={() => toggleReason("refused_to_sign")}
-                >
-                  Tegenpartij weigert te tekenen
-                </Button>
-                <Button
-                  type="button"
-                  variant={hasReason("hit_and_run") ? "default" : "outline"}
-                  className="min-h-11 justify-start"
-                  onClick={() => toggleReason("hit_and_run")}
-                >
-                  Vluchtmisdrijf
-                </Button>
-                <Button
-                  type="button"
-                  variant={hasReason("suspected_impairment") ? "default" : "outline"}
-                  className="min-h-11 justify-start"
-                  onClick={() => toggleReason("suspected_impairment")}
-                >
-                  Tegenpartij lijkt onder invloed
-                </Button>
+                <ul className="select-none space-y-2 text-[14px] font-semibold text-foreground">
+                  <li className="rounded-xl border border-border bg-card px-3.5 py-3">
+                    Tegenpartij weigert te tekenen
+                  </li>
+                  <li className="rounded-xl border border-border bg-card px-3.5 py-3">
+                    Vluchtmisdrijf
+                  </li>
+                  <li className="rounded-xl border border-border bg-card px-3.5 py-3">
+                    Tegenpartij lijkt onder invloed
+                  </li>
+                </ul>
               </div>
 
-              {state.policeReasons.length > 0 ? (
-                <div className="mt-4 rounded-lg bg-muted/40 p-3 text-[13px] text-muted-foreground">
-                  Noteer het PV-nummer zodra je dat hebt. In de volgende stap kun je dit invullen.
-                </div>
-              ) : null}
+              <div className="mt-4 rounded-lg bg-muted/40 p-3 text-[13px] text-muted-foreground">
+                Noteer het PV-nummer zodra je dat hebt. Je kan dit later invullen.
+              </div>
             </section>
 
-            {state.policeReasons.length > 0 ? (
-              <section className="rounded-xl border border-border bg-card p-4">
-                <h3 className="font-heading text-[15px] font-semibold text-foreground">
-                  PV-nummer (optioneel nu, kan later)
-                </h3>
-                <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                  Als de politie een PV opmaakt, noteer hier het nummer. Je kan dit later nog aanpassen.
-                </p>
-                <div className="mt-3">
-                  <Input
-                    value={state.policeReportNumber}
-                    placeholder="PV-nummer"
-                    onChange={(e) => updateState({ policeReportNumber: e.target.value })}
-                  />
-                </div>
-              </section>
-            ) : null}
+            {/* PV-nummer wordt later ingevuld; niet in deze fase. */}
           </div>
         );
       }
@@ -3512,6 +3588,7 @@ export function OngevalWizard({
       case "party_b_language": {
         const pickLanguage = (lang: "nl" | "fr" | "en") => {
           const next = { ...state, partyBLanguage: lang };
+          setUiLang(lang);
           const target = getNextStepId("party_b_language", next) ?? "party_b_optional";
           setState(advanceState(next, target));
         };
@@ -3519,27 +3596,27 @@ export function OngevalWizard({
           <div className="wizard-choice-step mx-auto w-full max-w-lg gap-3 md:max-w-2xl">
             <ModeCard
               icon={Languages}
-              title="Nederlands"
-              description="Partij B gebruikt Nederlands."
+              title={t(lang, "party_b_language.nl_title")}
+              description={t(lang, "party_b_language.nl_desc")}
               onClick={() => pickLanguage("nl")}
             />
             <ModeCard
               icon={Languages}
-              title="Frans"
-              description="Partij B gebruikt Frans."
+              title={t(lang, "party_b_language.fr_title")}
+              description={t(lang, "party_b_language.fr_desc")}
               onClick={() => pickLanguage("fr")}
             />
             <ModeCard
               icon={Languages}
-              title="Engels"
-              description="Partij B gebruikt Engels."
+              title={t(lang, "party_b_language.en_title")}
+              description={t(lang, "party_b_language.en_desc")}
               onClick={() => pickLanguage("en")}
             />
           </div>
         );
       }
       case "party_b_optional":
-        if (state.partiesCount !== 1) {
+        if (state.partiesCount !== 1 && state.devicesCount === 2) {
           return (
             <div className="px-4 py-10 text-center text-[15px] text-muted-foreground">
               Partij B vult mee in via het tweede toestel.
@@ -4231,11 +4308,213 @@ export function OngevalWizard({
             <p className="rounded-2xl border border-primary/20 bg-secondary px-3 py-2 text-[12.5px] leading-snug text-foreground">
               {t(lang, "sketch.intro")}
             </p>
-            <SignaturePad
-              value={state.accidentSketch}
-              onChange={(accidentSketch) => updateState({ accidentSketch })}
-              className="min-h-[280px]"
-            />
+            <div className="relative">
+              <SignaturePad
+                value={state.accidentSketch}
+                onChange={(accidentSketch) => updateState({ accidentSketch })}
+                tool={sketchTool}
+                stampRotationDeg={sketchRotation}
+                rotateSelectedByDeg={45}
+                rotateSelectedToken={sketchRotateToken}
+                onSelectedElementChange={setSelectedSketchEl}
+                updateSelected={sketchUpdate ?? undefined}
+                updateSelectedToken={sketchUpdateToken}
+                clearToken={sketchClearToken}
+                className="min-h-[280px]"
+              />
+
+              {/* Paint-like bottom toolbox (mobile friendly) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 pb-3">
+                <div className="pointer-events-auto mx-auto w-full max-w-2xl px-1">
+                  <div className="app-surface rounded-2xl border border-border/70 bg-background/70 shadow-[0_-10px_28px_rgba(11,20,26,0.10)] backdrop-blur-md">
+                    <div className="flex items-center gap-1 overflow-x-auto px-2 py-2">
+                      {(
+                        [
+                          { id: "select", label: "Select", Icon: MousePointer2 },
+                          { id: "pen", label: "Pen", Icon: Pencil },
+                          { id: "eraser", label: "Gum", Icon: Eraser },
+                          { id: "car", label: "Car", Icon: Car },
+                          { id: "road", label: "Road", Icon: MapPin },
+                          { id: "arrow", label: "Arrow", Icon: ArrowLeftRight },
+                          { id: "text", label: "Text", Icon: Type },
+                          { id: "bike", label: "Bike", Icon: Truck },
+                        ] as const
+                      ).map(({ id, label, Icon }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setSketchTool(id)}
+                          className={cn(
+                            "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-[13px] font-semibold transition-colors",
+                            sketchTool === id
+                              ? "border-primary/25 bg-secondary text-primary"
+                              : "border-border/70 bg-card text-muted-foreground hover:bg-muted/25",
+                          )}
+                        >
+                          <Icon className="size-4" strokeWidth={2} aria-hidden />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSketchClearToken((t) => t + 1)}
+                        className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-card px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted/25"
+                        title="Alles wissen"
+                      >
+                        <Trash2 className="size-4" strokeWidth={2} aria-hidden />
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSketchRotateToken((t) => t + 1)}
+                        className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-border/70 bg-card px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted/25"
+                        title="Rotate selected"
+                      >
+                        <RefreshCw className="size-4" strokeWidth={2} aria-hidden />
+                        Rotate
+                      </button>
+                    </div>
+
+                    <details className="border-t border-border/60 px-3 py-2">
+                      <summary className="cursor-pointer select-none text-[12.5px] font-semibold text-muted-foreground">
+                        Opties (grootte / rotatie / lengte)
+                      </summary>
+                      <div className="mt-2">
+                        {selectedSketchEl && selectedSketchEl.kind !== "stroke" ? (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {selectedSketchEl.kind === "stamp" ? (
+                              <>
+                                <div className="flex flex-col gap-1.5">
+                                  <p className="text-[12px] font-medium text-muted-foreground">
+                                    Size
+                                  </p>
+                                  <input
+                                    type="range"
+                                    min={20}
+                                    max={140}
+                                    value={Math.round(selectedSketchEl.size)}
+                                    onChange={(e) => {
+                                      setSketchUpdate({
+                                        kind: "stamp",
+                                        size: Number(e.target.value),
+                                      });
+                                      setSketchUpdateToken((t) => t + 1);
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <p className="text-[12px] font-medium text-muted-foreground">
+                                    Rotatie ({Math.round(selectedSketchEl.rotationDeg)}°)
+                                  </p>
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={359}
+                                    value={Math.round(selectedSketchEl.rotationDeg)}
+                                    onChange={(e) => {
+                                      setSketchUpdate({
+                                        kind: "stamp",
+                                        rotationDeg: Number(e.target.value),
+                                      });
+                                      setSketchUpdateToken((t) => t + 1);
+                                    }}
+                                  />
+                                </div>
+                                {selectedSketchEl.stampId === "road" ? (
+                                  <>
+                                    <div className="flex flex-col gap-1.5">
+                                      <p className="text-[12px] font-medium text-muted-foreground">
+                                        Lengte
+                                      </p>
+                                      <input
+                                        type="range"
+                                        min={0.6}
+                                        max={3}
+                                        step={0.05}
+                                        value={Number(selectedSketchEl.scaleX.toFixed(2))}
+                                        onChange={(e) => {
+                                          setSketchUpdate({
+                                            kind: "stamp",
+                                            scaleX: Number(e.target.value),
+                                          });
+                                          setSketchUpdateToken((t) => t + 1);
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                      <p className="text-[12px] font-medium text-muted-foreground">
+                                        Breedte
+                                      </p>
+                                      <input
+                                        type="range"
+                                        min={0.6}
+                                        max={2}
+                                        step={0.05}
+                                        value={Number(selectedSketchEl.scaleY.toFixed(2))}
+                                        onChange={(e) => {
+                                          setSketchUpdate({
+                                            kind: "stamp",
+                                            scaleY: Number(e.target.value),
+                                          });
+                                          setSketchUpdateToken((t) => t + 1);
+                                        }}
+                                      />
+                                    </div>
+                                  </>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex flex-col gap-1.5">
+                                  <p className="text-[12px] font-medium text-muted-foreground">
+                                    Tekstgrootte
+                                  </p>
+                                  <input
+                                    type="range"
+                                    min={10}
+                                    max={40}
+                                    value={Math.round(selectedSketchEl.fontSize)}
+                                    onChange={(e) => {
+                                      setSketchUpdate({
+                                        kind: "text",
+                                        fontSize: Number(e.target.value),
+                                      });
+                                      setSketchUpdateToken((t) => t + 1);
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <p className="text-[12px] font-medium text-muted-foreground">
+                                    Rotatie ({Math.round(selectedSketchEl.rotationDeg)}°)
+                                  </p>
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={359}
+                                    value={Math.round(selectedSketchEl.rotationDeg)}
+                                    onChange={(e) => {
+                                      setSketchUpdate({
+                                        kind: "text",
+                                        rotationDeg: Number(e.target.value),
+                                      });
+                                      setSketchUpdateToken((t) => t + 1);
+                                    }}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[12px] text-muted-foreground">
+                            Tip: kies <strong>Select</strong> en tik op een icoon/tekst om het te verplaatsen en aan te passen.
+                          </p>
+                        )}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </div>
             <p className="px-1 text-[12px] text-muted-foreground">
               {t(lang, "sketch.optional_hint")}
             </p>
@@ -4252,6 +4531,7 @@ export function OngevalWizard({
       case "overview_detail":
         return <OverviewTabs state={state} lang={lang} />;
       case "signature_a":
+        const canSignA = state.role === "A";
         return (
           <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
             <p className="text-[14px] leading-relaxed text-muted-foreground">
@@ -4275,11 +4555,24 @@ export function OngevalWizard({
             </p>
             <SignaturePad
               value={state.signaturePartyA}
-              onChange={(signaturePartyA) => updateState({ signaturePartyA })}
+              disabled={!canSignA}
+              onChange={(signaturePartyA) => {
+                if (!canSignA) {
+                  toast.error("Bestuurder B kan niet tekenen voor bestuurder A.");
+                  return;
+                }
+                updateState({ signaturePartyA });
+              }}
             />
+            {!canSignA ? (
+              <p className="text-[12px] text-muted-foreground">
+                Alleen bestuurder A kan hier tekenen.
+              </p>
+            ) : null}
           </div>
         );
       case "signature_b":
+        const canSignB = state.role === "B";
         return (
           <div className="flex min-h-[280px] flex-col gap-3 px-4 py-4">
             <p className="text-[14px] leading-relaxed text-muted-foreground">
@@ -4287,8 +4580,20 @@ export function OngevalWizard({
             </p>
             <SignaturePad
               value={state.signaturePartyB}
-              onChange={(signaturePartyB) => updateState({ signaturePartyB })}
+              disabled={!canSignB}
+              onChange={(signaturePartyB) => {
+                if (!canSignB) {
+                  toast.error("Bestuurder A kan niet tekenen voor bestuurder B.");
+                  return;
+                }
+                updateState({ signaturePartyB });
+              }}
             />
+            {!canSignB ? (
+              <p className="text-[12px] text-muted-foreground">
+                Alleen bestuurder B kan hier tekenen.
+              </p>
+            ) : null}
           </div>
         );
       case "complete":
@@ -4838,10 +5143,12 @@ function Field({
   label,
   required = false,
   children,
+  lang = "nl",
 }: {
   label: string;
   required?: boolean;
   children: React.ReactNode;
+  lang?: OngevalLang;
 }) {
   // Mobile-first form field. Alle child inputs/textareas/selects krijgen via
   // descendant-selectors een grotere, native-aanvoelende stijl:
@@ -4868,7 +5175,7 @@ function Field({
     >
       <span className="text-[13.5px] font-semibold text-foreground">
         {label}
-        {required ? <span className="sr-only"> (verplicht)</span> : null}
+        {required ? <span className="sr-only"> ({t(lang, "common.required")})</span> : null}
       </span>
       {children}
     </label>

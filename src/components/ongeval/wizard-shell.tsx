@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { TbCarCrash, TbScribble } from "react-icons/tb";
 import { FaMagnifyingGlass, FaSignature } from "react-icons/fa6";
-import { MdOutlineSmartphone } from "react-icons/md";
+import { FcTwoSmartphones } from "react-icons/fc";
 import type { IconType } from "react-icons";
 import { cn } from "@/lib/utils";
 import { InfoBanner } from "@/components/ongeval/info-banner";
@@ -52,7 +52,7 @@ const STEP_ICONS: Partial<Record<OngevalStepId, LucideIcon | IconType>> = {
   insurer_select: BadgeCheck,
   vehicle_confirm: Car,
   parties_count: Users,
-  devices_count: MdOutlineSmartphone,
+  devices_count: FcTwoSmartphones,
   role_select: UserCircle,
   share_qr: QrCode,
   scan_qr: QrCode,

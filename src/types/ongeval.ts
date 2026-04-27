@@ -287,6 +287,13 @@ export type AccidentReportState = {
   partyB: PartyDetails;
 
   /**
+   * UI-hulp: in partij B formulier kan de bestuurder dezelfde persoon zijn als
+   * de verzekeringsnemer. Indien `true` nemen we naam + adres automatisch over
+   * zodat de gebruiker dit niet dubbel hoeft in te vullen.
+   */
+  partyBDriverSameAsPolicyholder: boolean;
+
+  /**
    * Eén of meerdere gekozen ongevalsituaties.
    * Volgt de volgorde van `SITUATION_CATEGORIES`. Door multi-select kunnen
    * meerdere categorieën samen aangevinkt worden (bv. parking + lane_change).
@@ -464,6 +471,7 @@ export function createInitialAccidentState(): AccidentReportState {
     getuigenList: [],
     partyA: emptyParty(),
     partyB: emptyParty(),
+    partyBDriverSameAsPolicyholder: false,
     situationCategories: [],
     situationDetailKeys: [],
     maneuverAKeys: [],

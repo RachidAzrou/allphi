@@ -360,6 +360,7 @@ const UI_STRINGS: LangDict = {
     "common.confirm": "Bevestigen",
     "common.yes": "Ja",
     "common.no": "Nee",
+    "common.required": "verplicht",
     "common.not_filled": "Niet ingevuld",
     "common.not_specified": "Niet opgegeven",
     "common.saving": "Bezig met opslaan…",
@@ -380,6 +381,10 @@ const UI_STRINGS: LangDict = {
     "party_b_form.section.insurance": "Verzekering (partij B)",
     "party_b_form.section.vehicle": "Voertuig (partij B)",
     "party_b_form.section.driver": "Bestuurder (partij B)",
+    "party_b_form.driver_same_as_policyholder.title":
+      "Bestuurder = verzekeringsnemer",
+    "party_b_form.driver_same_as_policyholder.description":
+      "Neem naam en adres automatisch over zodat je dit niet dubbel moet invullen.",
     "field.firstname": "Voornaam",
     "field.lastname": "Naam",
     "field.street": "Straat",
@@ -654,6 +659,12 @@ const UI_STRINGS: LangDict = {
     "scan.error.upload_failed":
       "Upload mislukt. Controleer je internetverbinding en probeer opnieuw.",
     "common.retry": "Opnieuw",
+    "party_b_language.nl_title": "Nederlands",
+    "party_b_language.fr_title": "Frans",
+    "party_b_language.en_title": "Engels",
+    "party_b_language.nl_desc": "Partij B gebruikt Nederlands.",
+    "party_b_language.fr_desc": "Partij B gebruikt Frans.",
+    "party_b_language.en_desc": "Partij B gebruikt Engels.",
   },
   fr: {
     "common.next": "Suivant",
@@ -662,6 +673,7 @@ const UI_STRINGS: LangDict = {
     "common.confirm": "Confirmer",
     "common.yes": "Oui",
     "common.no": "Non",
+    "common.required": "obligatoire",
     "common.not_filled": "Non renseigné",
     "common.not_specified": "Non précisé",
     "common.saving": "Enregistrement…",
@@ -680,6 +692,10 @@ const UI_STRINGS: LangDict = {
     "party_b_form.section.insurance": "Assurance (partie B)",
     "party_b_form.section.vehicle": "Véhicule (partie B)",
     "party_b_form.section.driver": "Conducteur (partie B)",
+    "party_b_form.driver_same_as_policyholder.title":
+      "Conducteur = preneur d'assurance",
+    "party_b_form.driver_same_as_policyholder.description":
+      "Reprend automatiquement le nom et l'adresse pour éviter une double saisie.",
     "field.firstname": "Prénom",
     "field.lastname": "Nom",
     "field.street": "Rue",
@@ -945,6 +961,12 @@ const UI_STRINGS: LangDict = {
     "scan.error.upload_failed":
       "Téléversement échoué. Vérifiez votre connexion et réessayez.",
     "common.retry": "Réessayer",
+    "party_b_language.nl_title": "Néerlandais",
+    "party_b_language.fr_title": "Français",
+    "party_b_language.en_title": "Anglais",
+    "party_b_language.nl_desc": "La partie B utilise le néerlandais.",
+    "party_b_language.fr_desc": "La partie B utilise le français.",
+    "party_b_language.en_desc": "La partie B utilise l’anglais.",
   },
   en: {
     "common.next": "Next",
@@ -953,6 +975,7 @@ const UI_STRINGS: LangDict = {
     "common.confirm": "Confirm",
     "common.yes": "Yes",
     "common.no": "No",
+    "common.required": "required",
     "common.not_filled": "Not provided",
     "common.not_specified": "Not specified",
     "common.saving": "Saving…",
@@ -971,6 +994,10 @@ const UI_STRINGS: LangDict = {
     "party_b_form.section.insurance": "Insurance (party B)",
     "party_b_form.section.vehicle": "Vehicle (party B)",
     "party_b_form.section.driver": "Driver (party B)",
+    "party_b_form.driver_same_as_policyholder.title":
+      "Driver = policyholder",
+    "party_b_form.driver_same_as_policyholder.description":
+      "Automatically copy name and address so you don’t need to enter them twice.",
     "field.firstname": "First name",
     "field.lastname": "Last name",
     "field.street": "Street",
@@ -1231,6 +1258,12 @@ const UI_STRINGS: LangDict = {
     "scan.error.upload_failed":
       "Upload failed. Check your connection and try again.",
     "common.retry": "Retry",
+    "party_b_language.nl_title": "Dutch",
+    "party_b_language.fr_title": "French",
+    "party_b_language.en_title": "English",
+    "party_b_language.nl_desc": "Party B uses Dutch.",
+    "party_b_language.fr_desc": "Party B uses French.",
+    "party_b_language.en_desc": "Party B uses English.",
   },
 };
 
