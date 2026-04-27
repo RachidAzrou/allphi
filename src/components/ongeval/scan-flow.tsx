@@ -194,7 +194,6 @@ export function ScanPdfPreview({
       // Supabase zal via "download" response headers een attachment forceren.
       const { data, error: signErr } = await supabase.storage
         .from("ongeval-scans")
-        // @ts-expect-error supabase-js supports `download`, typings vary per version
         .createSignedUrl(resolvedPath, 60 * 10, {
           download: `aanrijdingsformulier-scan-${reportId}.pdf`,
         });

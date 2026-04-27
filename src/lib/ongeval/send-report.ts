@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -192,7 +193,7 @@ ${lines
 }
 
 async function buildDamagePhotoLines(
-  adminClient: ReturnType<typeof createServerSupabase>,
+  adminClient: SupabaseClient,
   photos: DamagePhoto[],
 ): Promise<string[]> {
   const lines: string[] = [];
